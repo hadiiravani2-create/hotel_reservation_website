@@ -1,0 +1,26 @@
+/* src/app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* متغیرهای رنگی برای استفاده در گام 1.4 */
+:root {
+  /* رنگ های پیش فرض برای شروع پروژه */
+  --color-primary-brand: #007BFF; 
+  --color-secondary-brand: #6c757d;
+}
+
+/* تعریف فونت (مثلا ایران سنس) */
+@font-face {
+  font-family: 'IranSans';
+  src: url('/fonts/IRANSans.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* اعمال فونت و RTL سراسری */
+body {
+  direction: rtl; /* کلید اصلی RTL */
+  text-align: right;
+  font-family: 'IranSans', sans-serif;
+}
