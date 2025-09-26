@@ -1,8 +1,10 @@
 // src/api/coreService.ts
+// src/api/coreService.ts (حتماً این Placeholder را تغییر دهید)
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://your-backend-domain.com/', // URL اصلی بک اند جنگو
+  // آدرس واقعی سرور جنگو شما را اینجا قرار دهید:
+  baseURL: 'https://demo.mirisafar.com/', 
 });
 
 export const getSiteSettings = async () => {

@@ -38,8 +38,12 @@ export const calculateMultiPrice = async (data: any): Promise<{ total_price: num
     const response = await api.post('/pricing/api/calculate-multi-price/', data);
     return response.data;
 };
+export const getHotelDetails = async (slug: string): Promise<any> => {
+    // Endpoint: /hotels/api/hotels/<slug>/
+    const response = await api.get(`/hotels/api/hotels/${slug}/`); //
+    return response.data;
+};
 
-// می‌توانید در این مرحله سرویس‌های City و Amenities را نیز از /hotels/api/ دریافت کنید
 export const getCities = async () => {
     const response = await api.get('/hotels/api/cities/'); // ViewSet برای Cities
     return response.data;

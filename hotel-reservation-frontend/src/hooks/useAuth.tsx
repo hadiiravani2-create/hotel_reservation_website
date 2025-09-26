@@ -1,8 +1,10 @@
 // src/hooks/useAuth.ts
 import React, { useState, useEffect, useContext, createContext } from 'react';
 import { useRouter } from 'next/router';
-import api, { login, register } from '../api/coreService'; // نمونه Axios و توابع API از گام ۱.۳
 
+import api from '../api/coreService'; 
+import { login, register } from '../api/authService'; // <--- این خط صحیح است
+// ...
 // تعریف مدل داده‌های کاربر
 interface User {
   username: string;
