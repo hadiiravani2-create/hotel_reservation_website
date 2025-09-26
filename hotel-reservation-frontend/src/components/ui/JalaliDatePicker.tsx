@@ -1,11 +1,9 @@
-// src/components/ui/JalaliDatePicker.tsx
+// src/components/ui/JalaliDatePicker.tsx - (Final Stable Version)
 
 import React, { useState } from 'react';
-// فرض بر این است که این کتابخانه ها نصب شده‌اند (گام ۱.۱)
-// ما از یک نام مستعار ساده به جای import مستقیم استفاده می‌کنیم
-const DatePicker: any = require('react-day-picker-jalali').default; 
-const jmoment: any = require('jmoment'); // برای مدیریت و فرمت‌دهی تاریخ‌های شمسی
-import { Input } from './Input'; // استفاده از کامپوننت ورودی پایه
+// تکیه به کتابخانه پایدار moment-jalaali برای تمام منطق تاریخ
+const momentJalaali: any = require('moment-jalaali'); 
+import { Input } from './Input'; 
 
 interface JalaliDatePickerProps {
   label: string;
@@ -14,9 +12,7 @@ interface JalaliDatePickerProps {
   required?: boolean;
 }
 
-// فرمت تاریخ خروجی مورد نیاز بک‌اند جنگو (مثلاً 1404-07-05)
 const API_DATE_FORMAT = 'jYYYY-jMM-jDD'; 
-// فرمت نمایش برای کاربر (مثلاً 1404/07/05)
 const DISPLAY_DATE_FORMAT = 'jYYYY/jMM/jDD';
 
 export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({ 
@@ -25,27 +21,31 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({
   onDateChange, 
   required 
 }) => {
-  // تاریخ به صورت Date object ذخیره می‌شود
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const [isValid, setIsValid] = useState(true);
 
-  const handleDayClick = (day: Date, modifiers: any) => {
-    // اگر روز انتخاب شده غیرفعال بود، کاری انجام نده
-    if (modifiers.disabled) {
-        return;
+  // شبیه‌سازی منطق برای اعتبارسنجی فرمت ورودی کاربر
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
+
+    // بررسی اینکه آیا رشته ورودی طول مناسب برای فرمت دارد
+    if (value.length === DISPLAY_DATE_FORMAT.length) {
+      const jMomentDate = momentJalaali(value, DISPLAY_DATE_FORMAT);
+      
+      if (jMomentDate.isValid()) {
+          setIsValid(true);
+          // تبدیل به فرمت API برای ارسال به والد (SearchForm/Checkout)
+          onDateChange(name, jMomentDate.format(API_DATE_FORMAT));
+      } else {
+          setIsValid(false);
+          onDateChange(name, ''); // تاریخ نامعتبر است
+      }
+    } else {
+         setIsValid(true); // اگر هنوز کامل نیست، خطا نده
+         onDateChange(name, '');
     }
-    setSelectedDate(day);
-    setIsPickerOpen(false);
-
-    // تبدیل تاریخ میلادی (Date Object) به شمسی و فرمت استاندارد API
-    const jMomentDate = jmoment(day).format(API_DATE_FORMAT);
-    onDateChange(name, jMomentDate);
   };
-  
-  // متن نمایش در ورودی
-  const displayValue = selectedDate 
-    ? jmoment(selectedDate).format(DISPLAY_DATE_FORMAT) 
-    : '';
 
   return (
     <div className="relative mb-4" dir="rtl">
@@ -53,32 +53,23 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       
-      {/* فیلد ورودی که به عنوان دکمه باز شدن تقویم عمل می‌کند */}
+      {/* استفاده از Input معمولی به عنوان جایگزین Picker برای پایداری */}
       <input
         type="text"
         name={name}
-        value={displayValue}
-        readOnly
+        value={inputValue}
         required={required}
-        onClick={() => setIsPickerOpen(!isPickerOpen)}
-        // استفاده از استایل های Input پایه برای حفظ ظاهر یکپارچه
-        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white cursor-pointer focus:outline-none focus:ring-primary-brand focus:border-primary-brand"
-        placeholder={label}
+        onChange={handleInputChange}
+        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-primary-brand focus:border-primary-brand ${
+             !isValid && 'border-red-500 focus:border-red-500 focus:ring-red-500' // استایل خطا
+        }`}
+        placeholder={DISPLAY_DATE_FORMAT}
       />
       
-      {/* پاپ‌آپ تقویم */}
-      {isPickerOpen && (
-        <div className="absolute z-50 top-full mt-2 left-0 right-0 max-w-xs mx-auto shadow-2xl rounded-lg bg-white p-4">
-          <DatePicker 
-            selectedDays={selectedDate}
-            onDayClick={handleDayClick}
-            // اعمال کلاس برای استایل دهی RTL/ظاهری پاپ‌آپ
-            className="jalali-datepicker-custom" 
-            dir="rtl"
-            // می‌توان روزهای قبل از امروز را غیرفعال کرد
-            // disabledDays={{ before: new Date() }}
-          />
-        </div>
+      {!isValid && (
+        <p className="text-xs text-red-500 mt-1">
+            تاریخ وارد شده نامعتبر است. لطفاً از قالب {DISPLAY_DATE_FORMAT} استفاده کنید.
+        </p>
       )}
     </div>
   );
