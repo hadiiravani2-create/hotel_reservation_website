@@ -1,4 +1,4 @@
-// src/hooks/useAuth.tsx v1.1.0
+// src/hooks/useAuth.tsx v1.1.1
 import React, { useState, useEffect, useContext, createContext } from 'react';
 import { useRouter } from 'next/router';
 
@@ -68,8 +68,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(AUTH_TOKEN_KEY, token);
     
     // MOCK: Simulating fetching the agency_role from the API response (or based on a dummy check)
-    const mockAgencyRole = (data.username === 'agency' || data.username === 'AgencyUser') ? 'admin' : null;
-    setUser({ username: userData.username, agency_role: mockAgencyRole }); 
+    // FIX: Safely access username and nested agency_role for login
+    const username = userData?.username || 'Guest';
+    const agencyRole = userData?.agency_role?.name || null;
+    
+    setUser({ username: username, agency_role: agencyRole }); 
     router.push('/'); 
   };
 
@@ -78,9 +81,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { token, user: userData }: AuthResponse = await register(data); 
     localStorage.setItem(AUTH_TOKEN_KEY, token);
     
-    // MOCK: New registered user is not an agency by default.
-    setUser({ username: userData.username, agency_role: null });
-    router.push('/'); 
+    // FIX: Safely access username and nested agency_role for registration (where agency_role is null for regular users)
+    const username = userData?.username || 'Guest';
+    // Access the 'name' property inside the nested 'agency_role' object
+    const agencyRole = userData?.agency_role?.name || null;
+    
+    setUser({ username: username, agency_role: agencyRole });
+    // Redirect to login page after successful registration
+    router.push('/login?registered=true'); 
   };
 
   const logoutHandler = () => {

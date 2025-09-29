@@ -1,4 +1,4 @@
-// src/api/authService.ts v1.0.0
+// src/api/authService.ts v1.0.1
 import api from './coreService'; // Axios configured instance from step 1.3
 
 // Interface for login data payload
@@ -17,11 +17,19 @@ export interface RegisterData {
   password2: string;
 }
 
+// NEW: Interface for the Agency Role object returned by the backend (nested in user)
+interface AgencyRoleResponse {
+    id: number;
+    name: string; // The role name string expected by useAuth
+}
+
 // Interface for API response
 export interface AuthResponse {
   token: string;
   user: {
     username: string;
+    // ADDED: agency_role which is now a nested object (or null)
+    agency_role: AgencyRoleResponse | null; 
     // ... other user info
   };
 }

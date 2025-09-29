@@ -1,19 +1,18 @@
-// src/api/coreService.ts
-// src/api/coreService.ts (حتماً این Placeholder را تغییر دهید)
+// src/api/coreService.ts v1.0.1
 import axios from "axios";
 
 const api = axios.create({
-    // آدرس واقعی سرور جنگو شما را اینجا قرار دهید:
-    baseURL: "http://demo.mirisafar.com",
+    // CHANGED: Using the frontend domain. Nginx will proxy /api/ to Django.
+    baseURL: "http://hotel.mirisafar.com",
 });
 
 export const getSiteSettings = async () => {
-    const response = await api.post("/api/settings/");
+    const response = await api.get("/api/settings/");
     return response.data;
 };
 
 export const getMenu = async (menuSlug: string) => {
-    const response = await api.post(`/api/menu/${menuSlug}/`);
+    const response = await api.get(`/api/menu/${menuSlug}/`);
     return response.data;
 };
 

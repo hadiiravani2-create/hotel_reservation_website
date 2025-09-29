@@ -1,4 +1,4 @@
-// src/pages/register.tsx v1.0.2
+// src/pages/register.tsx v1.0.4
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link'; // Import Link for internal routing
@@ -47,15 +47,49 @@ const RegisterPage = () => {
     }
 
     try {
+      // FIX FOR 400 ERROR (Backend requires agency/agency_role even if null)
+      const finalPayload = {
+        ...formData,
+        agency: null,      // Explicitly set null for normal users
+        agency_role: null, // Explicitly set null for normal users
+      };
+      
       // API expects all fields, including password2 for validation in the backend (e.g., Django)
-      await register(formData); 
+      await register(finalPayload); 
       // Redirect to login page after successful registration
       router.push('/login?registered=true');
-    } catch (err: unknown) { // Fixed: Changed type to 'unknown'
-      // Use type assertion to safely access error properties
-      const axiosError = err as { message?: string, response?: { data?: { error?: string } } };
-      // Display validation errors from API
-      const errorMessage = axiosError.response?.data?.error || axiosError.message || 'خطا در ثبت نام. لطفاً اطلاعات را بررسی کنید.';
+    } catch (err: unknown) { 
+      // FIX for TypeScript compiler error and 400 details
+      const axiosError = err as { 
+          message?: string, 
+          response?: { data?: { error?: string } | { [key: string]: unknown } } 
+      };
+      const apiErrors = axiosError.response?.data;
+      
+      let errorMessage = 'خطا در ثبت نام. لطفاً اطلاعات را بررسی کنید.';
+      
+      if (typeof apiErrors === 'object' && apiErrors !== null && !Array.isArray(apiErrors)) {
+          // Case 1: DRF Validation error ({field: ["error"]})
+          // Check if it looks like a validation error map (e.g., has keys that aren't just 'error')
+          const isValidationError = !('error' in apiErrors) && Object.keys(apiErrors).length > 0;
+          
+          if (isValidationError) {
+              // Extract and display detailed validation error
+              const detail = Object.values(apiErrors).flat().join(' | ');
+              if (detail) {
+                  errorMessage = 'اعتبارسنجی ناموفق: ' + detail;
+              }
+          } 
+          // Case 2: Simple error object that might contain { "error": "..." } (FIXED COMPILE ERROR HERE)
+          else if (typeof (apiErrors as { error?: string }).error === 'string') {
+              errorMessage = (apiErrors as { error: string }).error;
+          }
+          
+      } else {
+          // Fallback: Axios message or generic error message
+          errorMessage = axiosError.message || errorMessage;
+      }
+
       setError(errorMessage);
     } finally {
       setLoading(false);
