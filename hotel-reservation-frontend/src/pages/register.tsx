@@ -1,12 +1,23 @@
-// src/pages/register.tsx
+// src/pages/register.tsx v1.0.2
 import { useState } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link'; // Import Link for internal routing
 import { useAuth } from '../hooks/useAuth';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 
+// Define the required interface for form data (excluding password2 for API call if separate)
+interface RegisterFormData {
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  password: string;
+  password2: string;
+}
+
 const RegisterPage = () => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<RegisterFormData>({
     username: '',
     email: '',
     first_name: '',
@@ -20,7 +31,7 @@ const RegisterPage = () => {
   const { register } = useAuth();
   const router = useRouter();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => { // Explicitly typed the event
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -36,12 +47,16 @@ const RegisterPage = () => {
     }
 
     try {
-      await register(formData);
-      // هدایت به صفحه اصلی یا ورود پس از موفقیت
+      // API expects all fields, including password2 for validation in the backend (e.g., Django)
+      await register(formData); 
+      // Redirect to login page after successful registration
       router.push('/login?registered=true');
-    } catch (err: any) {
-      // نمایش خطاهای اعتبارسنجی از API (مانند username تکراری یا password نامعتبر)
-      setError(err.message || 'خطا در ثبت نام. لطفاً اطلاعات را بررسی کنید.');
+    } catch (err: unknown) { // Fixed: Changed type to 'unknown'
+      // Use type assertion to safely access error properties
+      const axiosError = err as { message?: string, response?: { data?: { error?: string } } };
+      // Display validation errors from API
+      const errorMessage = axiosError.response?.data?.error || axiosError.message || 'خطا در ثبت نام. لطفاً اطلاعات را بررسی کنید.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -60,12 +75,12 @@ const RegisterPage = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="نام کاربری" name="username" type="text" required onChange={handleChange} />
-            <Input label="ایمیل" name="email" type="email" required onChange={handleChange} />
-            <Input label="نام" name="first_name" type="text" required onChange={handleChange} />
-            <Input label="نام خانوادگی" name="last_name" type="text" required onChange={handleChange} />
-            <Input label="رمز عبور" name="password" type="password" required onChange={handleChange} />
-            <Input label="تکرار رمز عبور" name="password2" type="password" required onChange={handleChange} />
+            <Input label="نام کاربری" name="username" type="text" required onChange={handleChange} value={formData.username} />
+            <Input label="ایمیل" name="email" type="email" required onChange={handleChange} value={formData.email} />
+            <Input label="نام" name="first_name" type="text" required onChange={handleChange} value={formData.first_name} />
+            <Input label="نام خانوادگی" name="last_name" type="text" required onChange={handleChange} value={formData.last_name} />
+            <Input label="رمز عبور" name="password" type="password" required onChange={handleChange} value={formData.password} />
+            <Input label="تکرار رمز عبور" name="password2" type="password" required onChange={handleChange} value={formData.password2} />
           </div>
           
           <div className="pt-2">
@@ -77,9 +92,11 @@ const RegisterPage = () => {
 
         <p className="mt-6 text-center text-sm text-gray-600">
           قبلاً ثبت نام کرده‌اید؟ 
-          <a href="/login" className="font-medium text-primary-brand hover:underline mr-1">
-            ورود
-          </a>
+          <Link href="/login" legacyBehavior>
+            <a className="font-medium text-primary-brand hover:underline mr-1">
+              ورود
+            </a>
+          </Link>
         </p>
       </div>
     </div>

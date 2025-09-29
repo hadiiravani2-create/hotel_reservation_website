@@ -1,28 +1,33 @@
-// src/hooks/useAuth.ts
+// src/hooks/useAuth.tsx v1.1.0
 import React, { useState, useEffect, useContext, createContext } from 'react';
 import { useRouter } from 'next/router';
 
 import api from '../api/coreService'; 
-import { login, register } from '../api/authService'; // <--- این خط صحیح است
-// ...
-// تعریف مدل داده‌های کاربر
+// Import types and functions from authService (assuming LoginData/RegisterData/AuthResponse are exported)
+import { login, register, LoginData, RegisterData, AuthResponse } from '../api/authService'; 
+
+// Define User data model
 interface User {
   username: string;
-  // می توانید فیلدهای بیشتری مانند firstName, lastName, agencyRole را اضافه کنید
+  // Added agency_role to support dashboard logic and fix type error
+  agency_role: string | null; 
 }
 
 
-// تعریف نوع (Type) برای Context
+// Define the type for Context
 interface AuthContextType {
   isAuthenticated: boolean;
-  user: { id: number; name: string } | null;
-  login: (username: string, password: string) => Promise<boolean>;
+  user: User | null; // Use the corrected User interface
+  // Use LoginData and AuthResponse for strong typing
+  login: (data: LoginData) => Promise<void>; 
+  register: (data: RegisterData) => Promise<void>; 
   logout: () => void;
+  loading: boolean; // Add loading state for context
 }
 
-// ایجاد Context با یک مقدار پیش‌فرض که خطا (Error) پرتاب کند
+// Create Context with a default value that throws an error
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-// نام کلید ذخیره‌سازی توکن
+// Key for token storage
 const AUTH_TOKEN_KEY = 'authToken';
 
 // --- Auth Provider ---
@@ -31,42 +36,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // useEffect برای بارگذاری توکن و تنظیم Interceptor
+  // useEffect for loading token and setting up the Interceptor
   useEffect(() => {
-    const token = localStorage.getItem(AUTH_TOKEN_KEY);
     
-    // ۱. تنظیم Interceptor
+    // 1. Setup Interceptor (It is now safe to run here as the file is a Provider/Hook)
     api.interceptors.request.use(config => {
         const currentToken = localStorage.getItem(AUTH_TOKEN_KEY);
         if (currentToken) {
-            // تزریق توکن به هدر Authorization برای تمام درخواست‌های محافظت‌شده
+            // Inject token into the Authorization header for all protected requests
             config.headers.Authorization = `Token ${currentToken}`;
         }
         return config;
     });
 
-    // ۲. بررسی توکن در زمان بارگذاری (می‌تواند شامل فراخوانی /api/profile هم باشد)
+    // 2. Check token on load
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
     if (token) {
-        // در یک سناریوی واقعی، باید توکن را اعتبارسنجی کرد، اما برای سادگی فرض می‌کنیم معتبر است.
-        // در اینجا باید منطقی برای دیکد کردن یا فراخوانی یک API برای دریافت اطلاعات کاربر بر اساس توکن اضافه شود.
-        setUser({ username: "Guest" }); // مقداردهی موقت
+        // MOCK: In a real scenario, an API call to get the user profile would be here.
+        // For local testing, we mock an Agency Admin user for dashboard access test.
+        // This assumes the backend returns 'AgencyUser' for login checks
+        setUser({ username: "Guest", agency_role: "admin" }); 
     }
     
     setLoading(false);
-  }, []);
+  }, []); 
 
-  const loginHandler = async (data: any) => {
-    const { token } = await login(data);
+  // Use LoginData for type safety
+  const loginHandler = async (data: LoginData) => {
+    // We assume the API response includes the user object with agency_role
+    const { token, user: userData }: AuthResponse = await login(data); 
     localStorage.setItem(AUTH_TOKEN_KEY, token);
-    setUser({ username: data.username }); 
-    router.push('/'); // هدایت پس از ورود موفق
+    
+    // MOCK: Simulating fetching the agency_role from the API response (or based on a dummy check)
+    const mockAgencyRole = (data.username === 'agency' || data.username === 'AgencyUser') ? 'admin' : null;
+    setUser({ username: userData.username, agency_role: mockAgencyRole }); 
+    router.push('/'); 
   };
 
-  const registerHandler = async (data: any) => {
-    const { token, user: userData } = await register(data);
+  // Use RegisterData for type safety
+  const registerHandler = async (data: RegisterData) => {
+    const { token, user: userData }: AuthResponse = await register(data); 
     localStorage.setItem(AUTH_TOKEN_KEY, token);
-    setUser({ username: userData.username });
-    router.push('/'); // هدایت پس از ثبت نام موفق
+    
+    // MOCK: New registered user is not an agency by default.
+    setUser({ username: userData.username, agency_role: null });
+    router.push('/'); 
   };
 
   const logoutHandler = () => {
@@ -81,9 +95,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login: loginHandler,
     register: registerHandler,
     logout: logoutHandler,
+    loading, // Added loading
   };
 
-  // تا زمانی که وضعیت کاربر مشخص نشده، چیزی نمایش نمی‌دهیم.
+  // Do not display anything until user status is determined.
   if (loading) {
     return <div>Loading System...</div>; 
   }

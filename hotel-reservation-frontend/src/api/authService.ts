@@ -1,16 +1,28 @@
-// src/api/authService.ts
-import api from './coreService'; // نمونه Axios پیکربندی شده در گام ۱.۳
+// src/api/authService.ts v1.0.0
+import api from './coreService'; // Axios configured instance from step 1.3
 
-interface LoginData {
+// Interface for login data payload
+export interface LoginData {
   username: string;
   password: string;
 }
 
-interface AuthResponse {
+// Interface for register data payload (including password confirmation)
+export interface RegisterData {
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  password: string;
+  password2: string;
+}
+
+// Interface for API response
+export interface AuthResponse {
   token: string;
   user: {
     username: string;
-    // ... سایر اطلاعات کاربر
+    // ... other user info
   };
 }
 
@@ -21,10 +33,11 @@ export const login = async (data: LoginData): Promise<AuthResponse> => {
 };
 
 // Endpoint: /api/auth/register/
-export const register = async (data: any): Promise<AuthResponse> => {
-  // استفاده از UserRegisterSerializer که شامل username، password و password2 است.
+// Using RegisterData for input data
+export const register = async (data: RegisterData): Promise<AuthResponse> => {
+  // Uses UserRegisterSerializer which includes username, password, and password2.
   const response = await api.post<AuthResponse>('/api/auth/register/', data);
   return response.data;
 };
 
-// می تواند شامل توابع logout و getUserProfile هم باشد.
+// Can also include logout and getUserProfile functions.

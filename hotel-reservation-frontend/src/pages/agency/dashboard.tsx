@@ -1,15 +1,30 @@
-// src/pages/agency/dashboard.tsx
-import React, { useState } from 'react';
+
+// src/pages/agency/dashboard.tsx v1.1.0
+import React from 'react'; 
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../hooks/useAuth'; 
-import { getAgencyReport, getAgencySubUsers } from '../../api/agencyService'; 
+// Import interfaces and functions from agencyService
+import { getAgencyReport, getAgencySubUsers, AgencyReportResponse, AgencySubUser } from '../../api/agencyService'; 
 import { Button } from '../../components/ui/Button'; 
-// فرض می‌کنیم MainLayout یک لایه پایه برای صفحه است.
+// Assuming MainLayout is a base page wrapper.
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => <div className="container mx-auto p-8" dir="rtl">{children}</div>; 
 
+// --- Interface definitions for compatibility ---
+
+// Interface matching the relevant part of the User object returned by useAuth
+interface UserForDashboard {
+    username: string; // Added username as it is used for checking user != null in useAuth
+    agency_role: string | null;
+}
+
+// Re-using imported interfaces from agencyService for consistency
+type AgencyReport = AgencyReportResponse;
+type Transaction = AgencyReport['transactions'][number];
+
 // --- Sub-Component for Financial Report (G4.5) ---
-const FinancialReport: React.FC<{ report: any }> = ({ report }) => {
+// Fixed: Explicitly typed report with imported interface
+const FinancialReport: React.FC<{ report: AgencyReport }> = ({ report }) => {
     const formatCurrency = (amount: number) => amount.toLocaleString('fa') + ' تومان';
     const isOverCredit = report.agency.current_balance > report.agency.credit_limit;
 
@@ -42,7 +57,7 @@ const FinancialReport: React.FC<{ report: any }> = ({ report }) => {
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {report.transactions.slice(0, 10).map((tx: any) => (
+                        {report.transactions.slice(0, 10).map((tx: Transaction) => ( // Fixed: Explicitly typed tx
                             <tr key={tx.id}>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tx.transaction_type}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{formatCurrency(tx.amount)}</td>
@@ -58,23 +73,24 @@ const FinancialReport: React.FC<{ report: any }> = ({ report }) => {
 };
 
 // --- Sub-Component for User Management (G4.6) ---
-const UserManagement: React.FC<{ user: any }> = ({ user }) => {
-    // از useAuth فرض می‌کنیم که agency_role کاربر را دارد
-    const { data: users } = useQuery({
+// Fixed: Using UserForDashboard | null to match useAuth hook return
+const UserManagement: React.FC<{ user: UserForDashboard | null }> = ({ user }) => {
+    // Only fetch if user is authenticated and is an admin
+    const { data: users } = useQuery<AgencySubUser[]>({
         queryKey: ['agencySubUsers'],
         queryFn: getAgencySubUsers,
-        enabled: user?.agency_role === 'admin', // فقط برای ادمین آژانس فعال شود
+        enabled: user?.agency_role === 'admin', // Only enabled for agency admin
     });
 
     const isAdmin = user?.agency_role === 'admin';
     
     const handleAddUser = () => {
-        // اینجا باید فرم ایجاد کاربر را باز کنید
+        // Here, the form for creating a user should open
         alert('در اینجا فرم ایجاد/ویرایش کاربر باز می‌شود (G4.6 - CRUD).');
     }
 
     if (!isAdmin) {
-        // این محدودیت توسط بک‌اند هم اعمال می‌شود
+        // This restriction is also applied by the backend
         return <div className="p-4 bg-yellow-50 rounded-lg">شما مجوز مدیریت کاربران را ندارید.</div>;
     }
 
@@ -95,7 +111,7 @@ const UserManagement: React.FC<{ user: any }> = ({ user }) => {
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {users?.map((subUser: any) => (
+                        {users?.map((subUser: AgencySubUser) => ( // Fixed: Explicitly typed subUser
                             <tr key={subUser.id}>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{subUser.username}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{subUser.agency_role?.name || 'تعریف نشده'}</td>
@@ -114,17 +130,18 @@ const UserManagement: React.FC<{ user: any }> = ({ user }) => {
 
 // --- Main Dashboard Page ---
 const AgencyDashboardPage: React.FC = () => {
+    // Note: useAuth returns user: User | null. The User interface now has agency_role.
     const { isAuthenticated, user, loading: authLoading } = useAuth(); 
     const router = useRouter();
     
-    // فرض می‌کنیم اگر کاربر احراز هویت شد، آبجکت user دارای agency_role باشد.
+    // Check if user is an agency user (This check now works due to the User interface update)
     const isAgencyUser = user && user.agency_role; 
 
     // Fetch Report Data
-    const { data: report, isLoading: isReportLoading, error: reportError } = useQuery({
+    const { data: report, isLoading: isReportLoading, error: reportError } = useQuery<AgencyReport>({
         queryKey: ['agencyReport'],
         queryFn: getAgencyReport,
-        enabled: isAuthenticated && isAgencyUser, // فقط اگر کاربر آژانسی بود، API فراخوانی شود
+        enabled: isAuthenticated && !!isAgencyUser, // Only fetch if authenticated and is an agency user
     });
 
     if (authLoading || isReportLoading) {
@@ -133,7 +150,7 @@ const AgencyDashboardPage: React.FC = () => {
     
     // Authorization Check
     if (!isAuthenticated || !isAgencyUser) {
-        // هدایت کاربر غیر آژانسی به صفحه اصلی یا ورود
+        // Redirect non-agency user to home or login page
         router.push('/'); 
         return null;
     }
@@ -142,16 +159,18 @@ const AgencyDashboardPage: React.FC = () => {
          return <MainLayout>خطا در دریافت گزارش: {reportError.message}</MainLayout>;
     }
 
+    // Since we checked 'user' is not null and has 'agency_role' before this point,
+    // we can safely cast user to UserForDashboard, although TypeScript understands the type flow.
     return (
         <MainLayout>
             <h1 className="text-4xl font-extrabold mb-10 border-b pb-4 text-gray-800">داشبورد آژانس</h1>
             
-            {/* بخش گزارش مالی (G4.5) */}
+            {/* Financial Report Section (G4.5) */}
             {report && <FinancialReport report={report} />}
             
-            {/* بخش مدیریت کاربران (G4.6) */}
+            {/* User Management Section (G4.6) */}
             <div className="mt-10">
-                <UserManagement user={user} /> 
+                <UserManagement user={user as UserForDashboard} /> 
             </div>
             
         </MainLayout>

@@ -1,9 +1,8 @@
-// src/components/ui/JalaliDatePicker.tsx - (Final Stable Version)
-
+// src/components/ui/JalaliDatePicker.tsx v2.0.3
 import React, { useState } from 'react';
-// تکیه به کتابخانه پایدار moment-jalaali برای تمام منطق تاریخ
+// Fixed: Reverted to require() to satisfy TypeScript compiler (TS2307) and disabled ESLint rules on this line (Fixes 4:22 and 4:28).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
 const momentJalaali: any = require('moment-jalaali'); 
-import { Input } from './Input'; 
 
 interface JalaliDatePickerProps {
   label: string;
@@ -15,6 +14,12 @@ interface JalaliDatePickerProps {
 const API_DATE_FORMAT = 'jYYYY-jMM-jDD'; 
 const DISPLAY_DATE_FORMAT = 'jYYYY/jMM/jDD';
 
+/**
+ * A date picker component using moment-jalaali for Persian calendar support.
+ * It uses a simple input field for user entry validation.
+ * @param {JalaliDatePickerProps} props - The component properties.
+ * @returns {JSX.Element} The date picker component.
+ */
 export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({ 
   label, 
   name, 
@@ -24,25 +29,25 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [isValid, setIsValid] = useState(true);
 
-  // شبیه‌سازی منطق برای اعتبارسنجی فرمت ورودی کاربر
+  // Logic to handle user input and format validation
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
 
-    // بررسی اینکه آیا رشته ورودی طول مناسب برای فرمت دارد
+    // Check if the input string has the appropriate length for the format
     if (value.length === DISPLAY_DATE_FORMAT.length) {
       const jMomentDate = momentJalaali(value, DISPLAY_DATE_FORMAT);
       
       if (jMomentDate.isValid()) {
           setIsValid(true);
-          // تبدیل به فرمت API برای ارسال به والد (SearchForm/Checkout)
+          // Convert to API format to send to the parent (SearchForm/Checkout)
           onDateChange(name, jMomentDate.format(API_DATE_FORMAT));
       } else {
           setIsValid(false);
-          onDateChange(name, ''); // تاریخ نامعتبر است
+          onDateChange(name, ''); // Invalid date
       }
     } else {
-         setIsValid(true); // اگر هنوز کامل نیست، خطا نده
+         setIsValid(true); // Don't show an error if not complete yet
          onDateChange(name, '');
     }
   };
@@ -53,7 +58,7 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       
-      {/* استفاده از Input معمولی به عنوان جایگزین Picker برای پایداری */}
+      {/* Use regular Input as a stable Picker alternative */}
       <input
         type="text"
         name={name}
@@ -61,7 +66,7 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({
         required={required}
         onChange={handleInputChange}
         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-primary-brand focus:border-primary-brand ${
-             !isValid && 'border-red-500 focus:border-red-500 focus:ring-red-500' // استایل خطا
+             !isValid && 'border-red-500 focus:border-red-500 focus:ring-red-500' // Error style
         }`}
         placeholder={DISPLAY_DATE_FORMAT}
       />

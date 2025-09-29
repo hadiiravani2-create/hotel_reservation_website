@@ -1,55 +1,97 @@
-// src/pages/search.tsx
-import React, { useState, useEffect } from 'react';
+// src/pages/search.tsx v1.0.3
+import React from 'react'; // Removed unused useState
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/router';
-import { searchRooms, getAmenities } from '../api/pricingService'; 
+// Import SearchParams as ApiSearchParams for clarity
+import { searchRooms, getAmenities, SearchParams as ApiSearchParams } from '../api/pricingService'; 
 import { Button } from '../components/ui/Button'; 
 
-// --- کامپوننت های فرضی مورد نیاز ---
-const RoomCard: React.FC<any> = ({ room }) => (
+// Interface definitions from pricingService.ts (re-declared for local component typing)
+interface RoomSearchResult {
+    room_id: number;
+    room_name: string;
+    hotel_id: number;
+    hotel_name: string;
+    board_options: Array<{
+      board_type_id: number;
+      board_type_name: string;
+      total_price: number;
+    }>;
+}
+
+interface Amenity {
+    id: number;
+    name: string;
+}
+
+// Interface for search URL parameters (from Next.js Router - mostly strings)
+interface SearchParams {
+    city_id: string; // From router query, always string
+    check_in: string;
+    check_out: string;
+    adults: number;
+    children: number;
+    min_price?: number;
+    max_price?: number;
+    stars?: string;
+    amenities?: string;
+}
+
+// Interface for FilterSidebar props
+interface FilterSidebarProps {
+    setFilter: (key: string, value: string | number | boolean | (string | number)[]) => void;
+}
+
+// --- Required Sub-Components ---
+const RoomCard: React.FC<{ room: RoomSearchResult }> = ({ room }) => (
     <div className="bg-white p-4 shadow rounded-lg mb-4 border border-gray-100">
         <h4 className="text-lg font-bold">{room.hotel_name} - {room.room_name}</h4>
         <p className="text-sm text-gray-600">اتاق برای {room.board_options.length} نوع سرویس موجود است.</p>
-        {/* نمایش بهترین قیمت */}
+        {/* Display best price */}
         <div className="mt-2 text-primary-brand font-extrabold text-xl">
             شروع قیمت از: {Math.min(...room.board_options.map(opt => opt.total_price)).toLocaleString('fa')} تومان
         </div>
-        {/* دکمه انتخاب برای رفتن به صفحه جزئیات/رزرو */}
+        {/* Button to navigate to hotel details or booking */}
     </div>
 );
 
-const FilterSidebar: React.FC<any> = ({ currentParams, setFilter }) => {
-    // واکشی لیست امکانات با React Query
-    const { data: amenities } = useQuery<any[]>({
+const FilterSidebar: React.FC<FilterSidebarProps> = ({ setFilter }) => { 
+    // Fetch amenities list with React Query
+    const { data: amenities } = useQuery<Amenity[]>({ 
         queryKey: ['amenities'],
         queryFn: getAmenities,
     });
     
-    // منطق فیلترها بر اساس پارامترهای stars، min_price، max_price و amenities
-    // به دلیل حجم کد، فقط ساختار آن را نشان می‌دهیم.
+    // Filtering logic based on params like stars, min_price, max_price, and amenities
     return (
         <div className="bg-white p-4 rounded-lg shadow sticky top-4" dir="rtl">
             <h3 className="font-bold mb-4 border-b pb-2">فیلتر نتایج</h3>
             
-            {/* فیلتر ستاره هتل */}
+            {/* Hotel Star Filter */}
             <div className="mb-4">
                 <label className="block font-medium mb-2">امتیاز (ستاره)</label>
-                {/* چک باکس برای 3، 4 و 5 ستاره */}
+                {/* Checkboxes for 3, 4, and 5 stars */}
                 {/* ... */}
             </div>
 
-            {/* فیلتر امکانات رفاهی */}
+            {/* Amenities Filter */}
             <div className="mb-4">
                 <label className="block font-medium mb-2">امکانات</label>
-                {amenities?.map((amenity: any) => (
+                {amenities?.map((amenity: Amenity) => ( 
                     <div key={amenity.id} className="flex items-center mb-1">
-                        <input type="checkbox" id={`amenity-${amenity.id}`} onChange={() => setFilter('amenities', amenity.id)} className="ml-2"/>
+                        <input 
+                            type="checkbox" 
+                            id={`amenity-${amenity.id}`} 
+                            // Update logic to pass amenity.id as string or number
+                            onChange={(e) => setFilter('amenities', e.target.checked ? amenity.id.toString() : '')} 
+                            className="ml-2"
+                        />
                         <label htmlFor={`amenity-${amenity.id}`}>{amenity.name}</label>
                     </div>
                 ))}
             </div>
             
-            <Button variant="secondary" onClick={() => {/* اعمال فیلتر */}}>اعمال فیلتر</Button>
+            <Button variant="secondary" className="w-full" onClick={() => {/* Apply filter logic */}}>اعمال فیلتر</Button>
         </div>
     );
 };
@@ -57,44 +99,48 @@ const FilterSidebar: React.FC<any> = ({ currentParams, setFilter }) => {
 
 const SearchResultsPage: React.FC = () => {
   const router = useRouter();
-  const [filters, setFilters] = useState({});
 
-  // تابع برای به‌روزرسانی پارامترهای فیلتر در URL
-  const updateUrl = (newFilters: any) => {
+  // Function to update filter parameters in URL
+  const updateUrl = (newFilters: Partial<SearchParams>) => { 
     router.push({
       pathname: '/search',
       query: { ...router.query, ...newFilters },
-    }, undefined, { shallow: true }); // shallow: true برای به‌روزرسانی URL بدون فراخوانی مجدد getInitialProps
+    }, undefined, { shallow: true });
   };
   
-  // خواندن پارامترهای جستجو از URL
-  const searchParams = {
+  // Read search parameters from URL (all as strings initially, or parsed numbers)
+  const searchParams: SearchParams = {
     city_id: router.query.city_id as string,
     check_in: router.query.check_in as string,
     check_out: router.query.check_out as string,
-    adults: parseInt(router.query.adults as string || '1'),
-    children: parseInt(router.query.children as string || '0'),
-    // اضافه شدن فیلترهای اختیاری
-    min_price: router.query.min_price ? parseInt(router.query.min_price as string) : undefined,
-    max_price: router.query.max_price ? parseInt(router.query.max_price as string) : undefined,
+    adults: parseInt(router.query.adults as string || '1', 10),
+    children: parseInt(router.query.children as string || '0', 10),
+    min_price: router.query.min_price ? parseInt(router.query.min_price as string, 10) : undefined,
+    max_price: router.query.max_price ? parseInt(router.query.max_price as string, 10) : undefined,
     stars: router.query.stars as string,
     amenities: router.query.amenities as string,
   };
 
-  // واکشی نتایج جستجو با React Query
-  const { data: results, isLoading, error } = useQuery<any[]>({
-    queryKey: ['search', searchParams],
-    queryFn: () => searchRooms(searchParams),
+  // Convert searchParams to match ApiSearchParams required structure (city_id must be number)
+  const apiSearchParams: ApiSearchParams = {
+    ...searchParams,
+    // Explicitly parse city_id to number as required by the API
+    city_id: parseInt(searchParams.city_id, 10), 
+  }
+  
+  // The ApiSearchParams object should now match the expected input for searchRooms.
+  const { data: results, isLoading, error } = useQuery<RoomSearchResult[]>({ 
+    // Fixed: Use apiSearchParams in queryKey for consistency and type safety (Fixes 'any' at line 126)
+    queryKey: ['search', apiSearchParams], 
+    // Pass the strictly typed API parameter object
+    queryFn: () => searchRooms(apiSearchParams), 
     enabled: !!(searchParams.city_id && searchParams.check_in && searchParams.check_out),
   });
 
-  const handleSetFilter = (key: string, value: any) => {
-      // منطق پیچیده تر برای افزودن/حذف مقادیر در فیلدهایی مثل amenities
-      setFilters(prev => {
-          const newFilters = { ...prev, [key]: value };
-          updateUrl(newFilters);
-          return newFilters;
-      });
+  const handleSetFilter = (key: string, value: string | number | boolean | (string | number)[]) => {
+      // Complex logic for adding/removing values in fields like amenities (simplified here)
+      const newFilters = { [key]: value };
+      updateUrl(newFilters as Partial<SearchParams>); // Cast to partial search params
   }
 
   if (!router.isReady) return <div>در حال بارگذاری...</div>;
@@ -105,18 +151,19 @@ const SearchResultsPage: React.FC = () => {
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         
-        {/* ستون فیلترها (سمت راست) */}
+        {/* Filter Column (Right Side) */}
         <div className="md:col-span-1">
-          <FilterSidebar currentParams={searchParams} setFilter={handleSetFilter}/>
+          <FilterSidebar setFilter={handleSetFilter}/>
         </div>
         
-        {/* ستون نتایج (سمت چپ) */}
+        {/* Results Column (Left Side) */}
         <div className="md:col-span-3">
             {isLoading && <div className="text-center p-8">در حال جستجوی اتاق‌های موجود...</div>}
-            {error && <div className="text-red-500 p-8 border border-red-300 rounded-lg">خطا در دریافت نتایج: {error.message}</div>}
+            {/* Used Error type casting for error message access */}
+            {error && <div className="text-red-500 p-8 border border-red-300 rounded-lg">خطا در دریافت نتایج: {(error as Error).message}</div>} 
             
             {(results && results.length > 0) ? (
-                results.map((room) => (
+                results.map((room: RoomSearchResult) => ( 
                     <RoomCard key={room.room_id} room={room} />
                 ))
             ) : (

@@ -1,48 +1,49 @@
-// src/components/GuestInputForm.tsx
+// src/components/GuestInputForm.tsx v2.0.1
 import React, { useState } from 'react';
 import { Input } from './ui/Input'; 
-
-interface GuestData {
-  first_name: string;
-  last_name: string;
-  is_foreign: boolean;
-  national_id: string;
-  passport_number: string;
-  phone_number: string;
-  nationality: string;
-}
+// Import GuestPayload type from reservationService for reuse
+import { GuestPayload } from '../api/reservationService';
 
 interface GuestInputFormProps {
   index: number;
-  onChange: (index: number, data: Partial<GuestData>) => void;
-  // می‌توان اطلاعات اتاق (مثلاً: میهمان ۱ از اتاق ۳) را اینجا نمایش داد.
+  // Use Partial<GuestPayload> directly
+  onChange: (index: number, data: Partial<GuestPayload>) => void; 
+  // Can display room information here (e.g., Guest 1 of Room 3).
 }
 
 export const GuestInputForm: React.FC<GuestInputFormProps> = ({ index, onChange }) => {
-  const [guestData, setGuestData] = useState<GuestData>({
+  // Use GuestPayload directly
+  const [guestData, setGuestData] = useState<GuestPayload>({
     first_name: '', last_name: '', is_foreign: false,
     national_id: '', passport_number: '', phone_number: '', nationality: '',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    let newValue: any = type === 'checkbox' ? checked : value;
+    // Explicitly typed newValue
+    const newValue: string | boolean = type === 'checkbox' ? checked : value;
 
-    if (name === 'is_foreign') {
-        // منطق شرطی: اگر خارجی شد، ملیت و پاسپورت فعال، کد ملی پاک شود
-        newValue = checked;
+    if (name === 'is_foreign' && typeof newValue === 'boolean') {
+        // Conditional logic: if foreign, activate nationality/passport, clear national_id
         setGuestData(prev => ({ 
             ...prev, 
             is_foreign: newValue,
-            national_id: newValue ? '' : prev.national_id, // پاک کردن کد ملی
-            passport_number: newValue ? prev.passport_number : '', // پاک کردن پاسپورت
+            national_id: newValue ? '' : prev.national_id, // Clear national_id
+            passport_number: newValue ? prev.passport_number : '', // Clear passport
         }));
+        
+        // Pass the updated data structure to the parent component
+        onChange(index, { 
+            ...guestData, 
+            is_foreign: newValue,
+            national_id: newValue ? '' : guestData.national_id,
+            passport_number: newValue ? guestData.passport_number : '',
+        });
+        
     } else {
-        setGuestData(prev => ({ ...prev, [name]: newValue }));
+        setGuestData(prev => ({ ...prev, [name]: newValue as string })); // Cast to string since it's typically value for text inputs
+        onChange(index, { ...guestData, [name]: newValue });
     }
-    
-    // ارسال داده‌ها به کامپوننت والد (checkout.tsx)
-    onChange(index, { ...guestData, [name]: newValue });
   };
 
   const isForeign = guestData.is_foreign;
@@ -56,19 +57,19 @@ export const GuestInputForm: React.FC<GuestInputFormProps> = ({ index, onChange 
         <Input label="نام خانوادگی" name="last_name" required onChange={handleChange} value={guestData.last_name}/>
         <Input label="شماره تماس" name="phone_number" required onChange={handleChange} value={guestData.phone_number}/>
         
-        {/* چک باکس خارجی بودن */}
+        {/* Foreign checkbox */}
         <div className="flex items-center mt-6">
             <input 
                 type="checkbox" 
                 name="is_foreign" 
                 checked={isForeign} 
                 onChange={handleChange} 
-                className="w-4 h-4 text-primary-brand border-gray-300 rounded focus:ring-primary-brand ml-2" // ml-2 برای RTL
+                className="w-4 h-4 text-primary-brand border-gray-300 rounded focus:ring-primary-brand ml-2" // ml-2 for RTL
             />
             <label className="text-sm font-medium">میهمان خارجی است</label>
         </div>
 
-        {/* فیلد کد ملی (فقط برای ایرانی) */}
+        {/* National ID field (Iranians only) */}
         <Input 
             label="کد ملی" 
             name="national_id" 
@@ -78,7 +79,7 @@ export const GuestInputForm: React.FC<GuestInputFormProps> = ({ index, onChange 
             value={guestData.national_id}
         />
         
-        {/* فیلد شماره پاسپورت (فقط برای خارجی) */}
+        {/* Passport Number field (Foreigners only) */}
         <Input 
             label="شماره پاسپورت" 
             name="passport_number" 
@@ -88,7 +89,7 @@ export const GuestInputForm: React.FC<GuestInputFormProps> = ({ index, onChange 
             value={guestData.passport_number}
         />
         
-        {/* فیلد تابعیت (فقط برای خارجی) */}
+        {/* Nationality field (Foreigners only) */}
         {isForeign && (
             <Input 
                 label="تابعیت" 
