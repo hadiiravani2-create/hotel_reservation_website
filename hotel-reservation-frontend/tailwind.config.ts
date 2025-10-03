@@ -1,10 +1,10 @@
-// tailwind.config.ts
+// tailwind.config.ts v0.2
 import type { Config } from 'tailwindcss'
 
 const config: Config = {
   content: [
-    './src/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    // FIX: Simplified the search to cover the entire 'src' directory, which is the standard Next.js behavior.
+    './src/**/*.{js,ts,jsx,tsx,mdx}', 
   ],
   theme: {
     extend: {

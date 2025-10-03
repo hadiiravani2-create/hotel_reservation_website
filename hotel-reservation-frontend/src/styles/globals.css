@@ -2,7 +2,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+@import "tailwindcss";
 /* متغیرهای رنگی برای استفاده در گام 1.4 */
 :root {
   /* رنگ های پیش فرض برای شروع پروژه */
@@ -23,4 +23,7 @@ body {
   direction: rtl; /* کلید اصلی RTL */
   text-align: right;
   font-family: 'IranSans', sans-serif;
+}
+.testclass {
+  color :red;
 }

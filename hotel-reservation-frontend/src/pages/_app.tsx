@@ -1,13 +1,12 @@
-// src/pages/_app.tsx
-
+// src/pages/_app.tsx v1.0.2
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AppProps } from 'next/app';
 // *اطمینان حاصل کنید که مسیر و نام فایل صحیح است.*
 // اگر از Pages Router استفاده می‌کنید، مسیر نسبی باید درست باشد
 import { AuthProvider } from '../hooks/useAuth'; // (یا '.. /hooks/useAuth.tsx' اگر پسوند ضروری باشد)
 
-// فرض می‌کنیم globals.css و QueryClientProvider درست تنظیم شده‌اند
-import '../app/globals.css'; 
+// FIX: Changing CSS import path from '../app/globals.css' to '../styles/globals.css' for Pages Router compatibility
+import '../styles/globals.css'; 
 
 const queryClient = new QueryClient();
 

@@ -115,10 +115,8 @@ const SearchForm: React.FC = () => {
             onChange={handleChange}
           />
         </div>
-
-
         {/* دکمه جستجو */}
-        <div className="col-span-full md:col-span-1">
+        <div className="col-span-full bg-blue-300 text-blue-800 font-bold md:col-span-1">
           <Button type="submit">جستجو</Button>
         </div>
       </form>

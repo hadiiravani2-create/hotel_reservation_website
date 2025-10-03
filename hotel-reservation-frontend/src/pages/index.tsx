@@ -6,8 +6,7 @@ import SearchForm from '../components/SearchForm'; // فرم جستجوی اصل
 const HomePage: React.FC = () => {
   return (
     // از dir="rtl" و Tailwind Layouts استفاده می‌کنیم
-    <div dir="rtl" className="min-h-screen bg-gray-50 pb-16">
-      
+    <div dir="rtl" className="min-h-screen bg-blue-50 pb-16">
       {/* 1. هدر اصلی (که تنظیمات سایت را واکشی می‌کند) */}
       <div className="shadow-md bg-white">
         <Header /> 
