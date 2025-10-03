@@ -1,4 +1,4 @@
-// src/pages/checkout.tsx v1.0.1
+// src/pages/checkout.tsx v1.0.2
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../hooks/useAuth';
@@ -28,7 +28,8 @@ interface BookingDetails {
 
 const CheckoutPage: React.FC = () => {
     const router = useRouter();
-    const { isAuthenticated, loading: authLoading } = useAuth();
+    // FIX: Change 'loading' to 'isLoading' to match the useAuth hook return
+    const { isAuthenticated, isLoading: authLoading } = useAuth(); 
     
     // Use the defined interface (Fixes 'any' at line 34)
     const [bookingDetails] = useState<BookingDetails>({

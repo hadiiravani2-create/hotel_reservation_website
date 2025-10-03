@@ -1,9 +1,14 @@
-// src/api/agencyService.ts v1.0.1
+// src/api/agencyService.ts v1.0.2
 import api from './coreService'; // نمونه Axios پیکربندی شده
 
 // Interfaces defined for use in other files
 
 export interface AgencyReportResponse {
+  // ADDED: Root-level report metrics expected by the dashboard
+  total_bookings: number;
+  pending_bookings: number;
+  total_commission: number;
+  
   agency: {
       name: string;
       credit_limit: number;

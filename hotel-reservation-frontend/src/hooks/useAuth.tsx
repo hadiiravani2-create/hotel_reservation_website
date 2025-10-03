@@ -1,125 +1,123 @@
-// src/hooks/useAuth.tsx v1.1.1
-import React, { useState, useEffect, useContext, createContext } from 'react';
+// src/hooks/useAuth.tsx v1.0.0
+import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { login as apiLogin, register as apiRegister, AuthResponse, LoginData, RegisterData } from '../api/authService';
+import api from '../api/coreService'; 
 import { useRouter } from 'next/router';
 
-import api from '../api/coreService'; 
-// Import types and functions from authService (assuming LoginData/RegisterData/AuthResponse are exported)
-import { login, register, LoginData, RegisterData, AuthResponse } from '../api/authService'; 
-
-// Define User data model
-interface User {
-  username: string;
-  // Added agency_role to support dashboard logic and fix type error
-  agency_role: string | null; 
-}
-
-
-// Define the type for Context
+// Interface for the context state
 interface AuthContextType {
   isAuthenticated: boolean;
-  user: User | null; // Use the corrected User interface
-  // Use LoginData and AuthResponse for strong typing
-  login: (data: LoginData) => Promise<void>; 
-  register: (data: RegisterData) => Promise<void>; 
+  user: AuthResponse['user'] | null;
+  token: string | null;
+  login: (data: LoginData) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
   logout: () => void;
-  loading: boolean; // Add loading state for context
+  isLoading: boolean;
 }
 
-// Create Context with a default value that throws an error
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-// Key for token storage
-const AUTH_TOKEN_KEY = 'authToken';
 
-// --- Auth Provider ---
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
+// Define the name for localStorage key
+const TOKEN_STORAGE_KEY = 'authToken';
+const USER_STORAGE_KEY = 'authUser';
 
-  // useEffect for loading token and setting up the Interceptor
-  useEffect(() => {
-    
-    // 1. Setup Interceptor (It is now safe to run here as the file is a Provider/Hook)
-    api.interceptors.request.use(config => {
-        const currentToken = localStorage.getItem(AUTH_TOKEN_KEY);
-        if (currentToken) {
-            // Inject token into the Authorization header for all protected requests
-            config.headers.Authorization = `Token ${currentToken}`;
+// Custom hook to handle authentication logic
+export const useAuth = () => {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [user, setUser] = useState<AuthResponse['user'] | null>(null);
+    const [token, setToken] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const router = useRouter();
+
+    // Function to set token and user, and update Axios headers
+    const setAuthData = useCallback((newToken: string, newUser: AuthResponse['user']) => {
+        setToken(newToken);
+        setUser(newUser);
+        setIsAuthenticated(true);
+        localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));
+        // Set authorization header globally for all API calls
+        api.defaults.headers.common['Authorization'] = `Token ${newToken}`;
+    }, []);
+
+    // Function to clear auth data
+    const clearAuthData = useCallback(() => {
+        setToken(null);
+        setUser(null);
+        setIsAuthenticated(false);
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        localStorage.removeItem(USER_STORAGE_KEY);
+        delete api.defaults.headers.common['Authorization'];
+    }, []);
+
+
+    // Effect to initialize auth status from localStorage on mount
+    useEffect(() => {
+        const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+        const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+        
+        if (storedToken && storedUser) {
+            try {
+                const parsedUser = JSON.parse(storedUser);
+                setAuthData(storedToken, parsedUser);
+            } catch (error) {
+                // If parsing fails, clear bad data
+                clearAuthData();
+            }
         }
-        return config;
-    });
+        setIsLoading(false);
+    }, [clearAuthData, setAuthData]); // Depend on memoized functions
 
-    // 2. Check token on load
-    const token = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (token) {
-        // MOCK: In a real scenario, an API call to get the user profile would be here.
-        // For local testing, we mock an Agency Admin user for dashboard access test.
-        // This assumes the backend returns 'AgencyUser' for login checks
-        setUser({ username: "Guest", agency_role: "admin" }); 
-    }
-    
-    setLoading(false);
-  }, []); 
+    // Login API call
+    const login = useCallback(async (data: LoginData) => {
+        const response = await apiLogin(data);
+        setAuthData(response.token, response.user);
+        // Redirect user to homepage or dashboard after successful login
+        router.push(response.user.agency_role ? '/agency/dashboard' : '/'); 
+    }, [setAuthData, router]);
 
-  // Use LoginData for type safety
-  const loginHandler = async (data: LoginData) => {
-    // We assume the API response includes the user object with agency_role
-    const { token, user: userData }: AuthResponse = await login(data); 
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
-    
-    // MOCK: Simulating fetching the agency_role from the API response (or based on a dummy check)
-    // FIX: Safely access username and nested agency_role for login
-    const username = userData?.username || 'Guest';
-    const agencyRole = userData?.agency_role?.name || null;
-    
-    setUser({ username: username, agency_role: agencyRole }); 
-    router.push('/'); 
-  };
+    // Register API call
+    const register = useCallback(async (data: RegisterData) => {
+        // Registration is assumed to return an auth token directly
+        const response = await apiRegister(data);
+        setAuthData(response.token, response.user);
+        // Redirect user after successful registration
+        router.push('/'); 
+    }, [setAuthData, router]);
 
-  // Use RegisterData for type safety
-  const registerHandler = async (data: RegisterData) => {
-    const { token, user: userData }: AuthResponse = await register(data); 
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
-    
-    // FIX: Safely access username and nested agency_role for registration (where agency_role is null for regular users)
-    const username = userData?.username || 'Guest';
-    // Access the 'name' property inside the nested 'agency_role' object
-    const agencyRole = userData?.agency_role?.name || null;
-    
-    setUser({ username: username, agency_role: agencyRole });
-    // Redirect to login page after successful registration
-    router.push('/login?registered=true'); 
-  };
 
-  const logoutHandler = () => {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    setUser(null);
-    router.push('/login');
-  };
+    // Logout function
+    const logout = useCallback(() => {
+        clearAuthData();
+        // Redirect to login page or home page
+        router.push('/login'); 
+    }, [clearAuthData, router]);
 
-  const value = {
-    user,
-    isAuthenticated: !!user,
-    login: loginHandler,
-    register: registerHandler,
-    logout: logoutHandler,
-    loading, // Added loading
-  };
-
-  // Do not display anything until user status is determined.
-  if (loading) {
-    return <div>Loading System...</div>; 
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    return { isAuthenticated, user, token, login, register, logout, isLoading };
 };
 
+// Provider component (Kept simple, assumed to be used in _app.tsx)
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const auth = useAuth(); // Use the hook to get all values
 
-// --- Custom Hook ---
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+    return (
+        // The provider value contains all necessary state and actions
+        <AuthContext.Provider value={auth}>
+            {auth.isLoading ? (
+                // Optional: Show a loading screen while checking local storage status
+                <div className="flex items-center justify-center min-h-screen">Checking auth status...</div>
+            ) : (
+                children
+            )}
+        </AuthContext.Provider>
+    );
+};
+
+// Hook to consume the auth context (used in other components like Header)
+export const useAuthContext = () => {
+    const context = useContext(AuthContext);
+    if (context === undefined) {
+        throw new Error('useAuthContext must be used within an AuthProvider');
+    }
+    return context;
 };
