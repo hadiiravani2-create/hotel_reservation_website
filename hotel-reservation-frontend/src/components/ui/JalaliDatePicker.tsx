@@ -1,5 +1,6 @@
-// src/components/ui/JalaliDatePicker.tsx v1.0.6
-// Final Solution: Switched to the dedicated `react-multi-date-picker` library for robust and native Jalali calendar support.
+// src/components/ui/JalaliDatePicker.tsx
+// version: 1.0.7
+// This component provides a Jalali (Persian) date picker with support for an initial value.
 import React from 'react';
 import DatePicker, { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -10,13 +11,14 @@ interface JalaliDatePickerProps {
   name: string;
   onDateChange: (name: string, dateString: string) => void;
   required?: boolean;
+  initialValue?: string; // Add optional initialValue prop
 }
 
-export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({ label, name, onDateChange, required }) => {
+export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({ label, name, onDateChange, required, initialValue }) => {
 
   const handleDateChange = (date: DateObject | null) => {
     if (date) {
-      // تاریخ برای API باید با فرمت YYYY-MM-DD ارسال شود
+      // Format date as YYYY-MM-DD for API consistency
       const formattedDateForApi = date.format("YYYY-MM-DD");
       onDateChange(name, formattedDateForApi);
     } else {
@@ -28,6 +30,7 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({ label, name,
     <div>
       <label className="block text-sm font-medium mb-1">{label} {required && <span className="text-red-500">*</span>}</label>
       <DatePicker
+        value={initialValue} // Use the initialValue to set the component's value
         onChange={handleDateChange}
         calendar={persian}
         locale={persian_fa}
@@ -37,4 +40,4 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({ label, name,
       />
     </div>
   );
-};
+};;

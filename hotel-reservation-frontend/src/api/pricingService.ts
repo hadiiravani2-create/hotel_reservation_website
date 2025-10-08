@@ -28,18 +28,28 @@ export interface MultiPriceData {
 }
 
 // Interface for HotelDetails (No changes needed here)
-export interface HotelDetailsResponse {
+export interface HotelDetails {
     name: string;
     stars: number;
     address: string;
     description: string;
     slug: string;
-    images: { id: number; url: string }[];
+    images: { image: string; caption: string | null; }[];
     amenities: { id: number; name: string; }[];
-    rooms: { id: number; room_type: string; capacity: number; current_price: number; }[];
+    available_rooms: {
+        id: number;
+        name: string;
+        base_capacity: number;
+        board_types: { id: number; name: string; code: string; }[];
+        calculated_price: {
+            price: number;
+            duration: number;
+        };
+    }[];
+    rules: string | null;
+    check_in_time: string | null;
+    check_out_time: string | null;
 }
-
-
 // Structure of data returned from the new HotelSearchAPIView
 export interface HotelSearchResult {
   hotel_id: number;
@@ -63,12 +73,21 @@ export const calculateMultiPrice = async (data: MultiPriceData): Promise<{ total
 };
 
 // No changes to this function
-export const getHotelDetails = async (slug: string): Promise<HotelDetailsResponse> => {
-    const response = await api.get<HotelDetailsResponse>(`/hotels/api/hotels/${slug}/`); 
+export const getHotelDetails = async (
+    slug: string,
+    check_in?: string,
+    duration?: string
+): Promise<HotelDetails> => {
+    const params: { [key: string]: string | undefined } = {};
+    // Only add params if they have a value
+    if (check_in) params.check_in = check_in;
+    if (duration) params.duration = duration;
+
+    // The endpoint now points to the correct HotelViewSet URL configured in the backend.
+    const response = await api.get<HotelDetails>(`/api/hotels/${slug}/`, { params });
     return response.data;
 };
 
-// No changes to this function
 export const getCities = async () => {
     const response = await api.get('/hotels/api/cities/');
     return response.data;

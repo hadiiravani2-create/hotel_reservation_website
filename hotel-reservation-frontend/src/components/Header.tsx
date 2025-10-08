@@ -112,7 +112,7 @@ const Header: React.FC = () => {
             >
                 {/* لوگو */}
                 <Link href="/" className="flex items-center gap-2">
-                    <Imagess
+                    <Image
                         className="object-contain"
                         src={logoSrc}
                         alt="لوگو"

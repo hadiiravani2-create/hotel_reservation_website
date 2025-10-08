@@ -1,9 +1,11 @@
 // src/components/ui/Button.tsx
+// version: 0.1
+// This component defines a customizable button and adds the 'outline' variant.
 
 import React from 'react';
 
 // انواع مختلف دکمه را تعریف می‌کنیم
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'link';
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'link' | 'outline'; // 'outline' added
 
 // رابط (Interface) برای Props
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -29,6 +31,10 @@ const getBaseStyles = (variant: ButtonVariant) => {
       break;
     case 'link':
       baseClasses += " text-primary-brand bg-transparent hover:underline shadow-none focus:ring-transparent focus:ring-offset-0";
+      break;
+    // New case for 'outline' variant
+    case 'outline':
+      baseClasses += " text-primary-brand bg-transparent border border-primary-brand hover:bg-primary-brand hover:text-white focus:ring-primary-brand";
       break;
     default:
       // اگر نوع مشخص نشد، پیش‌فرض primary باشد
