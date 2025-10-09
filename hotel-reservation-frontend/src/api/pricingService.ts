@@ -84,7 +84,7 @@ export const getHotelDetails = async (
     if (duration) params.duration = duration;
 
     // The endpoint now points to the correct HotelViewSet URL configured in the backend.
-    const response = await api.get<HotelDetails>(`/api/hotels/${slug}/`, { params });
+    const response = await api.get<HotelDetails>(`/hotels/api/hotels/${slug}/`, { params });
     return response.data;
 };
 

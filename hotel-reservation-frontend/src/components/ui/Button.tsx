@@ -1,30 +1,24 @@
 // src/components/ui/Button.tsx
-// version: 0.1
-// This component defines a customizable button and adds the 'outline' variant.
-
 import React from 'react';
 
-// انواع مختلف دکمه را تعریف می‌کنیم
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'link' | 'outline'; // 'outline' added
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'link' | 'outline';
 
-// رابط (Interface) برای Props
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant; // نوع دکمه (مثلاً اصلی، ثانویه)
-  loading?: boolean;      // برای نمایش حالت بارگذاری
+  variant?: ButtonVariant;
+  loading?: boolean;
   children: React.ReactNode;
 }
 
 const getBaseStyles = (variant: ButtonVariant) => {
-  // استایل‌های پایه برای همه دکمه‌ها
-  let baseClasses = "w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2";
+  let baseClasses = "w-full py-2 px-4 rounded-lg shadow-md text-sm font-semibold transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 transform hover:-translate-y-0.5 active:translate-y-0";
 
   switch (variant) {
     case 'primary':
-      // استفاده از رنگ primary-brand که در CSS Variables تعریف شده (گام ۱.۲)
-      baseClasses += " text-white bg-primary-brand hover:bg-opacity-90 focus:ring-primary-brand";
+      // FIX: Ensured the button is blue by default and slightly darker on hover
+      baseClasses += " text-white bg-blue-500 hover:bg-blue-600 focus:ring-blue-500";
       break;
     case 'secondary':
-      baseClasses += " text-gray-700 bg-gray-200 hover:bg-gray-300 focus:ring-gray-500";
+      baseClasses += " text-slate-700 bg-slate-200 hover:bg-slate-300 focus:ring-slate-500";
       break;
     case 'danger':
       baseClasses += " text-white bg-red-600 hover:bg-red-700 focus:ring-red-500";
@@ -32,13 +26,12 @@ const getBaseStyles = (variant: ButtonVariant) => {
     case 'link':
       baseClasses += " text-primary-brand bg-transparent hover:underline shadow-none focus:ring-transparent focus:ring-offset-0";
       break;
-    // New case for 'outline' variant
     case 'outline':
-      baseClasses += " text-primary-brand bg-transparent border border-primary-brand hover:bg-primary-brand hover:text-white focus:ring-primary-brand";
+      baseClasses += " text-primary-brand bg-transparent border-2 border-primary-brand hover:bg-primary-brand hover:text-white focus:ring-primary-brand";
       break;
     default:
-      // اگر نوع مشخص نشد، پیش‌فرض primary باشد
-      baseClasses += " text-white bg-primary-brand hover:bg-opacity-90 focus:ring-primary-brand";
+      // FIX: Default also set to blue
+      baseClasses += " text-white bg-blue-500 hover:bg-blue-600 focus:ring-blue-500";
   }
   return baseClasses;
 };
@@ -62,7 +55,6 @@ export const Button: React.FC<ButtonProps> = ({
       {...props}
     >
       {loading ? (
-        // آیکون ساده بارگذاری
         <span className="flex items-center justify-center">
             <svg className="animate-spin -ml-1 me-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

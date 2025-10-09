@@ -1,0 +1,39 @@
+/* src/app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* متغیرهای رنگی برای استفاده در گام 1.4 */
+:root {
+  /* رنگ های سازمانی جدید و مدرن */
+  --color-primary-brand: #3b82f6; /* آبی پررنگ‌تر و جذاب‌تر */
+  --color-secondary-brand: #64748b; /* خاکستری برای متون فرعی */
+}
+
+/* تعریف فونت (مثلا ایران سنس) */
+@font-face {
+  font-family: 'IranSans';
+  src: url('/fonts/IRANSans.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* اعمال فونت و استایل‌های پایه */
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-700;
+    direction: rtl;
+    text-align: right;
+    font-family: 'IranSans', sans-serif;
+  }
+
+  /* استایل تیترها برای خوانایی بهتر */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold text-slate-900;
+  }
+
+  /* افزودن انیمیشن نرم به تمام عناصر برای تجربه کاربری بهتر */
+  * {
+    @apply transition-colors duration-300;
+  }
+}

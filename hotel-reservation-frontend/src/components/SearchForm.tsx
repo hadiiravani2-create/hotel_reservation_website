@@ -1,5 +1,4 @@
-// src/components/SearchForm.tsx v1.0.1
-// Update: Replaced check_out, adults, and children with a duration input.
+// src/components/SearchForm.tsx
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/router";
@@ -18,7 +17,7 @@ const SearchForm: React.FC = () => {
     const [formData, setFormData] = useState({
         city_id: "",
         check_in: "",
-        duration: "1", // Default to 1 night
+        duration: "1",
     });
 
     const {
@@ -40,10 +39,11 @@ const SearchForm: React.FC = () => {
         setFormData((prev) => ({ ...prev, [name]: dateString }));
     };
 
+    // FIX: Added the missing handleSubmit function definition
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.city_id || !formData.check_in || !formData.duration) {
-            alert("لطفا تمام فیلدهای جستجو را پر کنید.");
+            alert("لطفا تمام فیلدهای فرم را پر کنید.");
             return;
         }
 
@@ -55,58 +55,46 @@ const SearchForm: React.FC = () => {
 
     return (
         <div
-            className="bg-white p-6 shadow-xl rounded-xl border border-gray-100"
+            className="bg-white px-6 py-9 shadow-2xl rounded-2xl border border-gray-100"
             dir="rtl"
         >
-            <h3 className="text-xl font-bold mb-4 text-primary-brand">
-                جستجوی هتل
-            </h3>
             <form
                 onSubmit={handleSubmit}
-                className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"
+                className="grid grid-cols-1 md:grid-cols-8 gap-4"
             >
-                {/* فیلد انتخاب شهر */}
-                <div className="col-span-full md:col-span-1">
-                    <label className="block text-sm font-medium mb-1">
-                        مقصد (شهر)
+                <div className="md:col-span-3">
+                    <label className="block text-sm font-medium text-slate-600 mb-1">
+                        نام شهر یا هتل
                     </label>
                     <select
                         name="city_id"
                         value={formData.city_id}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                        className="w-full h-12 p-4 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-brand focus:border-primary-brand hover:border-blue-500 transition-all"
                     >
                         <option value="">شهر را انتخاب کنید</option>
-                        {isCitiesLoading && (
-                            <option disabled>در حال بارگذاری...</option>
-                        )}
+                        {isCitiesLoading && <option disabled>در حال بارگذاری...</option>}
                         {cities?.map((city) => (
                             <option key={city.id} value={city.id}>
                                 {city.name}
                             </option>
                         ))}
                     </select>
-                    {citiesError && (
-                        <p className="text-red-500 text-xs mt-1">
-                            خطا در بارگذاری شهرها
-                        </p>
-                    )}
+                    {citiesError && <p className="text-red-500 text-xs mt-1">خطا در بارگذاری شهرها</p>}
                 </div>
 
-                {/* فیلد تاریخ ورود */}
-                <div className="col-span-full md:col-span-1">
+                <div className="md:col-span-2">
                     <JalaliDatePicker
-                        label="تاریخ ورود"
+                        label="از تاریخ"
                         name="check_in"
                         onDateChange={handleDateChange}
                         required
                     />
                 </div>
 
-                {/* فیلد مدت اقامت */}
-                <div className="col-span-full md:col-span-1">
+                <div className="md:col-span-1">
                     <Input
-                        label="مدت اقامت (شب)"
+                        label="به مدت"
                         name="duration"
                         type="number"
                         min="1"
@@ -114,14 +102,13 @@ const SearchForm: React.FC = () => {
                         onChange={handleChange}
                     />
                 </div>
-
-                {/* دکمه جستجو */}
-                <div className="col-span-full md:col-span-1">
+                
+                <div className="md:col-span-2 self-end">
                     <Button
                         type="submit"
-                        className="w-full bg-blue-500 text-white-800"
+                        className="w-full h-12"
                     >
-                        جستجو
+                        جستجوی هتل
                     </Button>
                 </div>
             </form>
