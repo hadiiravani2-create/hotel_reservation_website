@@ -18,13 +18,13 @@ const MAIN_MENU_QUERY_KEY = "mainMenu";
 // --- Menu component ---
 const Menu: React.FC<{ items: MenuItem[] }> = ({ items }) => (
     <nav className="absolute inset-x-0 flex justify-center">
-        <ul className="flex items-center gap-8 text-[15px] font-medium text-gray-700">
+        <ul className="flex items-center gap-5 text-[15px] font-medium text-gray-700">
             {items.map((item) => (
                 <li key={item.id}>
                     <Link
                         href={item.url}
                         target={item.target}
-                        className="transition-colors duration-200 hover:text-blue-700"
+                        className="transition-colors duration-200 hover:bg-gray-100 py-2 px-3 rounded-md"
                     >
                         {item.title}
                     </Link>
@@ -42,19 +42,12 @@ const AuthStatus: React.FC = () => {
         return (
             <div className="flex items-center space-x-4 space-x-reverse">
                 <Link
-                    href={
-                        user.agency_role ? "/agency/dashboard" : "/my-bookings"
-                    }
-                    className="text-sm font-semibold leading-6 text-blue-700 hover:text-blue-900"
+                    href="/login"
+                    className="flex items-center gap-1 text-sm font-semibold rounded-md leading-6 bg-blue-700 text-white py-2 px-3 transition-colors hover:bg-blue-800"
                 >
-                    {user.username}
+                    <User size={16} />
+                    <span>حساب کاربری</span>
                 </Link>
-                <button
-                    onClick={logout}
-                    className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 transition-colors"
-                >
-                    خروج
-                </button>
             </div>
         );
     }
