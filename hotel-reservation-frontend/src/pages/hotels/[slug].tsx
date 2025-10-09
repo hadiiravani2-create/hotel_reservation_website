@@ -1,289 +1,147 @@
 // src/pages/hotels/[slug].tsx
-// version: 1.1.0
-// This component displays detailed information about a hotel, including dynamic room availability and pricing based on user-selected dates.
+// version: 2.1.0
+// Final: Implements the complete two-column dynamic layout with robust state management, modular components, and fixes the infinite loop issue.
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
+import { GetServerSideProps } from 'next';
 import Image from 'next/image';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getHotelDetails } from '../../api/pricingService';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { JalaliDatePicker } from '../../components/ui/JalaliDatePicker';
+import { useState } from 'react';
+import { ParsedUrlQuery } from 'querystring';
 
-// --- Type Interfaces ---
+// --- API and Type Imports ---
+import { getHotelDetails, HotelDetails } from '@/api/pricingService';
+import { AvailableRoom, CartItem } from '@/types/hotel';
 
-interface HotelImage {
-    image: string;
-    caption: string | null;
+// --- Component Imports ---
+import BookingWidget from '@/components/BookingWidget';
+import RoomCard from '@/components/RoomCard';
+import { UserGroupIcon } from '@heroicons/react/24/outline'; // Assuming this is now installed
+
+interface HotelPageProps {
+  hotel: HotelDetails; // Basic hotel data fetched server-side
+  initialRooms: AvailableRoom[]; // Rooms list, possibly empty if no date in URL
 }
 
-interface BoardType {
-    id: number;
-    name: string;
-    code: string;
-}
-
-interface AvailableRoom {
-    id: number;
-    name: string;
-    base_capacity: number;
-    board_types: BoardType[];
-    calculated_price: {
-        price: number;
-        duration: number;
-    };
-    // ... other room fields
-}
-
-interface HotelDetails {
-    name: string;
-    stars: number;
-    address: string;
-    description: string;
+interface ContextParams extends ParsedUrlQuery {
     slug: string;
-    images: HotelImage[];
-    amenities: { id: number; name:string }[];
-    available_rooms: AvailableRoom[];
-    rules: string | null;
-    check_in_time: string | null;
-    check_out_time: string | null;
 }
 
-// --- Helper & Sub-Components ---
+const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
+  // State for rooms, initialized by server, updated by client
+  const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>(initialRooms);
+  // State for the local shopping cart
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  // State to show a loading indicator over the rooms list
+  const [isLoading, setIsLoading] = useState(false);
 
-const StarRating: React.FC<{ count: number }> = ({ count }) => (
-    <div className="flex text-yellow-500">
-        {Array.from({ length: count }, (_, i) => <span key={i}>⭐</span>)}
-    </div>
-);
+  // Handler for BookingWidget to update the parent page's room list
+  const handleRoomsFetch = (rooms: AvailableRoom[]) => {
+    setAvailableRooms(rooms);
+  };
 
-const formatCurrency = (amount: number) => amount.toLocaleString('fa');
+  // Handler for RoomCard to add/update items in the cart
+  const handleAddToCart = (newItem: CartItem) => {
+    setCartItems((prevItems) => {
+      const existingItemIndex = prevItems.findIndex((item) => item.id === newItem.id);
 
-// Date Picker Component
-const DateSelectionCard: React.FC<{
-    checkIn: string;
-    duration: string;
-    onDateChange: (name: string, date: string) => void;
-    onDurationChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onSubmit: () => void;
-}> = ({ checkIn, duration, onDateChange, onDurationChange, onSubmit }) => (
-    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg my-6" dir="rtl">
-        <h3 className="font-bold text-lg mb-3">بررسی قیمت و موجودی</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <JalaliDatePicker label="تاریخ ورود" name="check_in" onDateChange={onDateChange} initialValue={checkIn} required />
-            <Input label="مدت اقامت (شب)" name="duration" type="number" min="1" value={duration} onChange={onDurationChange} />
-            <Button onClick={onSubmit} className="w-full">بررسی</Button>
-        </div>
-    </div>
-);
-
-// Room Card Component
-const RoomCard: React.FC<{
-    room: AvailableRoom;
-    hasDate: boolean;
-    onSelectDateClick: () => void;
-}> = ({ room, hasDate, onSelectDateClick }) => {
-    const router = useRouter();
-    const [selectedBoard, setSelectedBoard] = useState<string>(room.board_types[0]?.id.toString() || '');
-
-    const handleRoomBooking = () => {
-        const { slug, check_in, duration } = router.query;
-        const params = new URLSearchParams({
-            hotelSlug: slug as string,
-            roomId: room.id.toString(),
-            check_in: check_in as string,
-            duration: duration as string,
-            board_type: selectedBoard,
-        });
-        router.push(`/checkout?${params.toString()}`);
-    };
-
-    const priceInfo = room.calculated_price;
-
-    return (
-        <div className="p-4 border bg-white rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            {/* Room Info */}
-            <div>
-                <p className="font-semibold text-lg">{room.name}</p>
-                <p className="text-sm text-gray-600">ظرفیت: {room.base_capacity} نفر</p>
-                {hasDate && room.board_types.length > 0 && (
-                     <div className="mt-2">
-                        <label className="text-sm font-medium text-gray-700">نوع سرویس:</label>
-                        <select
-                            value={selectedBoard}
-                            onChange={(e) => setSelectedBoard(e.target.value)}
-                            className="w-full sm:w-auto mt-1 px-2 py-1 border border-gray-300 rounded-md shadow-sm text-sm"
-                        >
-                            {room.board_types.map(bt => (
-                                <option key={bt.id} value={bt.id}>{bt.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                )}
-            </div>
-
-            {/* Pricing & Action */}
-            <div className="text-left w-full sm:w-auto">
-                <p className="text-sm text-gray-500">
-                    قیمت برای {priceInfo.duration} شب
-                </p>
-                <p className="text-xl font-extrabold text-green-600 mb-2">
-                    {formatCurrency(priceInfo.price || 0)} تومان
-                </p>
-                
-                {hasDate ? (
-                    <Button className="w-full sm:w-auto px-4 py-1" onClick={handleRoomBooking}>
-                        رزرو اتاق
-                    </Button>
-                ) : (
-                    <Button variant="outline" className="w-full sm:w-auto px-4 py-1" onClick={onSelectDateClick}>
-                        انتخاب تاریخ
-                    </Button>
-                )}
-            </div>
-        </div>
-    );
-};
-
-// --- Main Page Component ---
-
-const HotelDetailsPage: React.FC = () => {
-    const router = useRouter();
-    const queryClient = useQueryClient();
-    const { slug, check_in, duration: queryDuration } = router.query;
-
-    const [checkInDate, setCheckInDate] = useState<string>('');
-    const [duration, setDuration] = useState<string>('1');
-    const [showDatePicker, setShowDatePicker] = useState(false);
-
-    // Effect to sync state with URL query params on initial load
-    useEffect(() => {
-        if (router.isReady) {
-            setCheckInDate(check_in as string || '');
-            setDuration((queryDuration as string) || '1');
-            // If dates are provided in URL, no need to force date picker
-            setShowDatePicker(!check_in);
-        }
-    }, [router.isReady, check_in, queryDuration]);
-
-    // Fetch hotel data. Re-fetches when slug, checkInDate, or duration changes.
-    const { data: hotel, isLoading, isError, error } = useQuery<HotelDetails, Error>({
-        queryKey: ['hotelDetails', slug, checkInDate, duration],
-        queryFn: () => getHotelDetails(slug as string, checkInDate, duration),
-        enabled: !!slug,
+      if (existingItemIndex > -1) {
+        // If item with the same room and board type exists, update it
+        const updatedItems = [...prevItems];
+        updatedItems[existingItemIndex] = newItem;
+        return updatedItems;
+      } else {
+        // Otherwise, add as a new item
+        return [...prevItems, newItem];
+      }
     });
-    
-    const handleDateCheck = () => {
-        router.push({
-            pathname: `/hotels/${slug}`,
-            query: { ...router.query, check_in: checkInDate, duration },
-        }, undefined, { shallow: true }); // Update URL without full reload
-        setShowDatePicker(false);
-        // Invalidate to force re-fetch if needed, though queryKey change does this
-        queryClient.invalidateQueries({ queryKey: ['hotelDetails', slug] });
-    };
+     // Optional: Scroll to the booking widget to show the updated cart summary
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-    if (!router.isReady || isLoading) {
-        return <div className="container mx-auto p-8 text-center" dir="rtl">در حال بارگذاری جزئیات هتل...</div>;
-    }
+  return (
+    <div className="container mx-auto p-4 lg:p-8 bg-gray-50" dir="rtl">
+      {/* Hotel Header */}
+      <header className="mb-8">
+          <h1 className="text-4xl font-extrabold text-gray-800">{hotel.name}</h1>
+          <p className="text-lg text-gray-600 mt-1">{hotel.stars} ستاره - {hotel.address}</p>
+      </header>
 
-    if (isError) {
-        return <div className="container mx-auto p-8 text-center text-red-600" dir="rtl">
-            خطا در دریافت اطلاعات: {error.message}
-        </div>;
-    }
-    
-    if (!hotel) {
-         return <div className="container mx-auto p-8 text-center" dir="rtl">متأسفانه، هتل مورد نظر یافت نشد.</div>;
-    }
-    
-    const hasDateInQuery = !!check_in;
-    const rooms = hotel.available_rooms || [];
-
-    return (
-        <div className="container mx-auto p-6 md:p-10" dir="rtl">
-            
-            <header className="mb-8">
-                <h1 className="text-4xl font-extrabold text-gray-900 mb-2">{hotel.name}</h1>
-                <div className="flex items-center space-x-4 space-x-reverse text-gray-600">
-                    <StarRating count={hotel.stars} />
-                    <span>{hotel.address}</span>
+      <div className="flex flex-col lg:flex-row gap-8">
+        {/* Main Content Column */}
+        <main className="w-full lg:w-2/3">
+            {/* Image Gallery */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-8 h-96 rounded-lg overflow-hidden shadow-lg">
+                <div className="col-span-2 row-span-2 relative">
+                    <Image src={hotel.images[0]?.image || '/placeholder.png'} layout="fill" objectFit="cover" alt={hotel.name} priority />
                 </div>
-            </header>
-
-            <div className="mb-10 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {hotel.images && hotel.images.length > 0 ? (
-                    <div className="relative w-full h-96 rounded-lg shadow-xl overflow-hidden">
-                        <Image src={hotel.images[0].image} alt={hotel.name} layout="fill" objectFit="cover" priority />
+                {hotel.images.slice(1, 4).map((img, index) => (
+                    <div key={index} className="relative">
+                        <Image src={img.image} layout="fill" objectFit="cover" alt={`نمای هتل ${index + 2}`} />
                     </div>
-                ) : <div className="w-full h-96 bg-gray-200 flex items-center justify-center rounded-lg">تصویری موجود نیست</div>}
+                ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                <main className="lg:col-span-2">
-                    <section className="mb-8">
-                        <h2 className="text-2xl font-bold mb-4 border-b pb-2 text-primary-brand">توضیحات هتل</h2>
-                        <p className="text-gray-700 leading-relaxed">{hotel.description || 'توضیحات جامعی ثبت نشده است.'}</p>
-                    </section>
-                    
-                    <section className="mb-8">
-                        <h2 className="text-2xl font-bold mb-4 border-b pb-2 text-primary-brand">مقررات و اطلاعات</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                            <p><strong>ساعت ورود:</strong> {hotel.check_in_time || 'اعلام نشده'}</p>
-                            <p><strong>ساعت خروج:</strong> {hotel.check_out_time || 'اعلام نشده'}</p>
-                        </div>
-                         {hotel.rules && <p className="mt-4 text-gray-700 leading-relaxed text-sm whitespace-pre-line">{hotel.rules}</p>}
-                    </section>
-
-                    <section>
-                        <h2 className="text-2xl font-bold mb-4 border-b pb-2 text-primary-brand">امکانات هتل</h2>
-                        <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-gray-700">
-                            {hotel.amenities.map(amenity => (
-                                <li key={amenity.id} className="flex items-center text-sm">✅ {amenity.name}</li>
-                            ))}
-                        </ul>
-                    </section>
-                </main>
-
-                <aside className="lg:col-span-1">
-                    <div className="sticky top-10 p-6 bg-gray-50 rounded-xl shadow-lg">
-                        <div className="flex justify-between items-center">
-                             <h2 className="text-xl font-bold text-gray-900">اتاق‌های موجود</h2>
-                             {hasDateInQuery && (
-                                <Button variant="link" onClick={() => setShowDatePicker(!showDatePicker)}>تغییر تاریخ</Button>
-                             )}
-                        </div>
-                        
-                        {showDatePicker && (
-                             <DateSelectionCard 
-                                checkIn={checkInDate}
-                                duration={duration}
-                                onDateChange={(name, date) => setCheckInDate(date)}
-                                onDurationChange={(e) => setDuration(e.target.value)}
-                                onSubmit={handleDateCheck}
-                            />
+            {/* Rooms Section */}
+            <section id="rooms-section">
+                <h2 className="text-3xl font-bold mb-6 border-b pb-3">انتخاب اتاق</h2>
+                {isLoading ? (
+                    <div className="text-center p-10 bg-white rounded-lg shadow">
+                        <p className="text-lg font-semibold text-blue-600">در حال جستجوی بهترین قیمت‌ها برای شما...</p>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {availableRooms.length > 0 ? (
+                            availableRooms.map((room) => (
+                                <RoomCard key={room.id} room={room} onAddToCart={handleAddToCart} />
+                            ))
+                        ) : (
+                            <div className="text-center p-10 bg-gray-100 rounded-md border">
+                                <p className="font-semibold text-gray-700">
+                                    برای مشاهده قیمت و اتاق‌های موجود، لطفا تاریخ ورود و مدت اقامت خود را در پنل کناری مشخص کنید.
+                                </p>
+                            </div>
                         )}
-
-                        <div className="mt-4 space-y-4">
-                            {rooms.length > 0 ? (
-                                rooms.map(room => (
-                                    <RoomCard key={room.id} room={room} hasDate={hasDateInQuery} onSelectDateClick={() => setShowDatePicker(true)} />
-                                ))
-                            ) : (
-                                <div className="text-center text-red-500 p-4 border border-red-200 bg-red-50 rounded-lg">
-                                    {hasDateInQuery 
-                                        ? "در تاریخ انتخابی، اتاق خالی وجود ندارد."
-                                        : "برای مشاهده اتاق‌های موجود، لطفا تاریخ را انتخاب کنید."
-                                    }
-                                </div>
-                            )}
-                        </div>
                     </div>
-                </aside>
-            </div>
-        </div>
-    );
+                )}
+            </section>
+        </main>
+
+        {/* Sidebar Column */}
+        <aside className="w-full lg:w-1/3">
+          <BookingWidget 
+            hotelSlug={hotel.slug}
+            onRoomsFetch={handleRoomsFetch}
+            setIsLoading={setIsLoading}
+            cartItems={cartItems}
+          />
+        </aside>
+      </div>
+    </div>
+  );
 };
 
-export default HotelDetailsPage;
+// Fetches initial data on the server
+export const getServerSideProps: GetServerSideProps = async (context) => {
+    const { slug } = context.params as ContextParams;
+    const { check_in, duration } = context.query;
+
+    try {
+        // Fetch hotel details. If dates are provided, it will include priced rooms.
+        const hotel = await getHotelDetails(slug, check_in as string, duration as string);
+        
+        // available_rooms will be populated if check_in and duration are valid
+        const initialRooms = hotel.available_rooms || [];
+        
+        return { 
+            props: { 
+                hotel,
+                initialRooms 
+            } 
+        };
+    } catch (error) {
+        console.error('Failed to fetch initial hotel details:', error);
+        // If hotel is not found or another error occurs, show a 404 page
+        return { notFound: true };
+    }
+};
+
+export default HotelDetailPage;

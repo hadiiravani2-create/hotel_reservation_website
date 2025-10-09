@@ -1,6 +1,6 @@
 // src/types/hotel.d.ts
-// version: 1.0.0
-// Feature: Defines TypeScript interfaces for hotel details page and booking logic.
+// version: 1.0.1
+// Fix: Added is_available and error_message fields to the AvailableRoom interface to match the backend API response.
 
 /**
  * Represents a single amenity for a hotel or room.
@@ -54,10 +54,13 @@ export interface AvailableRoom {
   child_capacity: number;
   images: RoomImage[];
   amenities: Amenity[];
-  // List of available board types with their calculated prices for the selected dates
   priced_board_types: PricedBoardType[];
-  // The number of physical rooms available for the selected date range
   availability_quantity: number;
+  
+  // --- START: Fields added to sync with backend ---
+  is_available: boolean;
+  error_message: string | null;
+  // --- END: Fields added to sync with backend ---
 }
 
 
