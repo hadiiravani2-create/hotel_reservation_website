@@ -1,4 +1,7 @@
-// src/api/reservationService.ts v1.0.1
+// src/api/reservationService.ts v1.1.0
+// Feature: Added city_of_origin to GuestPayload.
+// Feature: Added extra_requests to BookingRoom payload.
+// Feature: Added 'card_to_card' to payment_method choices.
 import api from './coreService'; // نمونه Axios پیکربندی شده
 
 // Define GuestPayload interface (based on GuestInputForm.tsx)
@@ -10,22 +13,29 @@ export interface GuestPayload {
   passport_number: string;
   phone_number: string;
   nationality: string;
+  // New field
+  city_of_origin?: string | null; 
 }
 
 // Endpoint: /reservations/bookings/
 // This Payload is critical and maps directly to CreateBookingSerializer
-export interface BookingPayload { // Fixed: Added 'export' keyword
+export interface BookingPayload { 
   booking_rooms: Array<{
     room_type_id: number;
     quantity: number;
     adults: number;   // extra persons
     children: number; // children count
     board_type_id: number; // Selected board type from Checkout step
+    // New field
+    extra_requests?: string | null; 
   }>;
   check_in: string;
   check_out: string;
   guests: Array<GuestPayload>; // Explicitly using GuestPayload
-  payment_method: 'online' | 'credit' | 'in_person';
+  // Added 'card_to_card'
+  payment_method: 'online' | 'credit' | 'in_person' | 'card_to_card'; 
+  // New field for rules acceptance (write_only field on serializer)
+  rules_accepted: boolean;
 }
 
 interface BookingResponse {
