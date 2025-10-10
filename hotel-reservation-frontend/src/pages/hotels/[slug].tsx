@@ -18,6 +18,7 @@ import { AvailableRoom, CartItem } from '@/types/hotel';
 import BookingWidget from '@/components/BookingWidget';
 import RoomCard from '@/components/RoomCard';
 import { UserGroupIcon } from '@heroicons/react/24/outline';
+import moment, { Moment } from 'moment-jalaali';
 
 // --- Utility Functions ---
 const toEnglishDigits = (str: string | null | undefined): string => {

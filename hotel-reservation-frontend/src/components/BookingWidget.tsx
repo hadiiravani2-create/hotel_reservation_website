@@ -1,12 +1,11 @@
 // src/components/BookingWidget.tsx
-// version: 2.0.0
-// Feature: Added cart summary display with item details and removal functionality (to address Issue 3).
-// Fix: Added onRemoveFromCart to props.
+// version: 3.0.2
+// Fix: Changed Moment type reference to typeof moment.Moment to resolve the "Cannot find name 'Moment'" error.
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import moment from 'moment-jalaali';
-import { Moment } from 'moment';
+import moment from 'moment-jalaali'; // FIX: Removed { Moment } from import
+// ... (سایر ایمپورت‌ها)
 import { getHotelDetails } from '@/api/pricingService';
 import { HotelDetails } from '@/api/pricingService';
 import { CartItem } from '@/types/hotel';
@@ -16,8 +15,15 @@ import { XCircleIcon } from '@heroicons/react/24/outline'; // Icon for removal
 import { JalaliDatePicker } from './ui/JalaliDatePicker';
 import { Button } from './ui/Button';
 
-// Utility Functions
+// --- LocalStorage Keys (Must match checkout.tsx) ---
+const CHECKOUT_CART_KEY = 'localCart';
+const CHECKOUT_DATES_KEY = 'localDates';
+// ----------------------------------------------------
+
+
+// Utility Functions (remains unchanged)
 const toEnglishDigits = (str: string | null | undefined): string => {
+// ... (implementation remains unchanged)
     if (!str) return '';
     const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
     const arabicNumbers  = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
@@ -29,13 +35,12 @@ const toEnglishDigits = (str: string | null | undefined): string => {
 };
 
 interface BookingWidgetProps {
+// ... (remains unchanged) ...
   hotelSlug: string;
   onRoomsFetch: (rooms: HotelDetails['available_rooms']) => void;
   setIsLoading: (isLoading: boolean) => void;
   cartItems: CartItem[];
-  // START FIX 3: Added prop to handle item removal
   onRemoveFromCart: (itemId: string) => void;
-  // END FIX 3
 }
 
 const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, setIsLoading, cartItems, onRemoveFromCart }) => {
@@ -44,7 +49,8 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
 
   const sanitizedCheckIn = query.check_in && typeof query.check_in === 'string' ? toEnglishDigits(query.check_in) : null;
 
-  const [checkInDate, setCheckInDate] = useState<Moment | null>(
+  // FIX: Using typeof moment.Moment to correctly reference the type of the Moment instance
+  const [checkInDate, setCheckInDate] = useState<typeof moment.Moment | null>( 
     sanitizedCheckIn ? moment(sanitizedCheckIn, 'jYYYY-jMM-jDD') : null
   );
   const [duration, setDuration] = useState<number>(
@@ -76,6 +82,34 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
     }
   };
   
+  // --- Start: Logic to save cart and navigate (remains unchanged) ---
+  const handleCheckoutClick = () => {
+    if (!checkInDate || duration <= 0 || cartItems.length === 0) {
+        alert("لطفاً تاریخ ورود و اتاق‌های مورد نظر را انتخاب نمایید.");
+        return;
+    }
+    
+    try {
+        const dates = {
+            check_in: checkInDate.format('jYYYY-jMM-jDD'),
+            duration: duration,
+        };
+        
+        // Save items and dates to LocalStorage
+        localStorage.setItem(CHECKOUT_CART_KEY, JSON.stringify(cartItems));
+        localStorage.setItem(CHECKOUT_DATES_KEY, JSON.stringify(dates));
+
+        // Navigate to checkout page
+        router.push('/checkout');
+        
+    } catch (e) {
+        console.error("Failed to save cart to LocalStorage:", e);
+        alert("خطا در ذخیره اطلاعات سبد خرید. لطفاً مرورگر خود را بررسی کنید.");
+    }
+  };
+  // --- End: Logic to save cart and navigate ---
+
+
   const calculateCartTotal = () => {
     return cartItems.reduce((total, item) => total + item.total_price, 0);
   };
@@ -117,7 +151,6 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
         </Button>
       </div>
 
-      {/* START FIX 3: Detailed Cart Summary */}
       {cartItems.length > 0 && (
         <div className="mt-6 border-t pt-4">
           <h4 className="text-lg font-semibold mb-3">خلاصه رزرو ({totalItems} اتاق)</h4>
@@ -149,14 +182,13 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
             <span className="font-extrabold text-xl text-blue-700">{totalPrice.toLocaleString()} تومان</span>
           </div>
            <Button 
-            onClick={() => router.push('/checkout')} 
+            onClick={handleCheckoutClick}
             className="w-full mt-4 bg-green-600 hover:bg-green-700"
           >
             تکمیل رزرو و پرداخت
           </Button>
         </div>
       )}
-      {/* END FIX 3 */}
     </div>
   );
 };
