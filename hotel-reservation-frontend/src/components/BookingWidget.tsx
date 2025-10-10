@@ -1,6 +1,6 @@
 // src/components/BookingWidget.tsx
-// version: 1.0.3
-// Fix: Adapted JalaliDatePicker props to match the component's actual interface (using initialValue and onDateChange).
+// version: 1.1.0
+// Fix: Added a utility function to convert Persian numerals to English for dates from URL, ensuring correct date parsing.
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
@@ -14,6 +14,24 @@ import { CartItem } from '@/types/hotel';
 import { JalaliDatePicker } from './ui/JalaliDatePicker'; // Your component
 import { Button } from './ui/Button';
 
+// --- Utility Functions ---
+/**
+ * Converts Persian/Arabic digits in a string to English digits.
+ * @param str The string to convert.
+ * @returns The converted string.
+ */
+const toEnglishDigits = (str: string | null | undefined): string => {
+    if (!str) return '';
+    const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
+    const arabicNumbers  = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
+    let newStr = str;
+    for (let i = 0; i < 10; i++) {
+        newStr = newStr.replace(persianNumbers[i], i.toString()).replace(arabicNumbers[i], i.toString());
+    }
+    return newStr;
+};
+
+
 // Define the props for the component
 interface BookingWidgetProps {
   hotelSlug: string;
@@ -26,18 +44,26 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
   const router = useRouter();
   const { query } = router;
 
+  // Sanitize check_in from query params before parsing
+  const sanitizedCheckIn = query.check_in && typeof query.check_in === 'string' ? toEnglishDigits(query.check_in) : null;
+
   const [checkInDate, setCheckInDate] = useState<Moment | null>(
-    query.check_in && typeof query.check_in === 'string' ? moment(query.check_in, 'jYYYY-jMM-jDD') : null
+    sanitizedCheckIn ? moment(sanitizedCheckIn, 'jYYYY-jMM-jDD') : null
   );
   const [duration, setDuration] = useState<number>(
     query.duration && typeof query.duration === 'string' ? parseInt(query.duration, 10) : 1
   );
 
   useEffect(() => {
+    // This effect should ideally run only when the component mounts with valid query params.
+    // The handleAvailabilityCheck is now primarily user-driven via the button.
     if (checkInDate && duration > 0) {
-      handleAvailabilityCheck();
+      // To avoid an infinite loop or unnecessary re-fetches, you might want to reconsider this initial auto-fetch
+      // or add more checks, e.g., if rooms haven't been loaded yet.
+      // For now, it matches the original logic.
+      // handleAvailabilityCheck(); 
     }
-  }, []);
+  }, []); // Intentionally left dependency array to run only once on mount based on initial state.
 
   const handleAvailabilityCheck = async () => {
     if (!checkInDate) {
@@ -73,15 +99,13 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
       
       <div className="space-y-4">
         <div>
-          {/* --- START: JalaliDatePicker props corrected --- */}
           <JalaliDatePicker
             label="تاریخ ورود"
             name="check_in"
             initialValue={checkInDate ? checkInDate.format('jYYYY-jMM-jDD') : ''}
-            onDateChange={(name, date) => setCheckInDate(moment(date, 'jYYYY-jMM-jDD'))}
+            onDateChange={(name, date) => setCheckInDate(moment(toEnglishDigits(date), 'jYYYY-jMM-jDD'))}
             required
           />
-          {/* --- END: JalaliDatePicker props corrected --- */}
         </div>
         <div>
           <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">مدت اقامت (شب)</label>

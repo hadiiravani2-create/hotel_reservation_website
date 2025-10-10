@@ -1,6 +1,6 @@
 // src/pages/hotels/[slug].tsx
-// version: 2.1.0
-// Final: Implements the complete two-column dynamic layout with robust state management, modular components, and fixes the infinite loop issue.
+// version: 2.2.0
+// Fix: Added a utility function to convert Persian numerals to English in dates from URL params to fix parsing issues.
 
 import { GetServerSideProps } from 'next';
 import Image from 'next/image';
@@ -14,7 +14,25 @@ import { AvailableRoom, CartItem } from '@/types/hotel';
 // --- Component Imports ---
 import BookingWidget from '@/components/BookingWidget';
 import RoomCard from '@/components/RoomCard';
-import { UserGroupIcon } from '@heroicons/react/24/outline'; // Assuming this is now installed
+import { UserGroupIcon } from '@heroicons/react/24/outline';
+
+// --- Utility Functions ---
+/**
+ * Converts Persian/Arabic digits in a string to English digits.
+ * @param str The string to convert.
+ * @returns The converted string.
+ */
+const toEnglishDigits = (str: string | null | undefined): string => {
+    if (!str) return '';
+    const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
+    const arabicNumbers  = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
+    let newStr = str;
+    for (let i = 0; i < 10; i++) {
+        newStr = newStr.replace(persianNumbers[i], i.toString()).replace(arabicNumbers[i], i.toString());
+    }
+    return newStr;
+};
+
 
 interface HotelPageProps {
   hotel: HotelDetails; // Basic hotel data fetched server-side
@@ -125,8 +143,11 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     const { check_in, duration } = context.query;
 
     try {
+        // Sanitize check_in date by converting Persian/Arabic numerals to English
+        const sanitizedCheckIn = toEnglishDigits(check_in as string);
+
         // Fetch hotel details. If dates are provided, it will include priced rooms.
-        const hotel = await getHotelDetails(slug, check_in as string, duration as string);
+        const hotel = await getHotelDetails(slug, sanitizedCheckIn, duration as string);
         
         // available_rooms will be populated if check_in and duration are valid
         const initialRooms = hotel.available_rooms || [];
