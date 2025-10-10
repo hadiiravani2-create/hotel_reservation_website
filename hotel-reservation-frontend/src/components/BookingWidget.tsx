@@ -1,6 +1,7 @@
 // src/components/BookingWidget.tsx
-// version: 1.1.2
-// Fix: Reverted property name to 'total_price' to match the definitive CartItem interface (v1.0.1).
+// version: 2.0.0
+// Feature: Added cart summary display with item details and removal functionality (to address Issue 3).
+// Fix: Added onRemoveFromCart to props.
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
@@ -9,6 +10,7 @@ import { Moment } from 'moment';
 import { getHotelDetails } from '@/api/pricingService';
 import { HotelDetails } from '@/api/pricingService';
 import { CartItem } from '@/types/hotel';
+import { XCircleIcon } from '@heroicons/react/24/outline'; // Icon for removal
 
 // Custom components
 import { JalaliDatePicker } from './ui/JalaliDatePicker';
@@ -31,9 +33,12 @@ interface BookingWidgetProps {
   onRoomsFetch: (rooms: HotelDetails['available_rooms']) => void;
   setIsLoading: (isLoading: boolean) => void;
   cartItems: CartItem[];
+  // START FIX 3: Added prop to handle item removal
+  onRemoveFromCart: (itemId: string) => void;
+  // END FIX 3
 }
 
-const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, setIsLoading, cartItems }) => {
+const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, setIsLoading, cartItems, onRemoveFromCart }) => {
   const router = useRouter();
   const { query } = router;
 
@@ -71,7 +76,6 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
     }
   };
   
-  // Corrected the property accessor back to snake_case 'total_price'
   const calculateCartTotal = () => {
     return cartItems.reduce((total, item) => total + item.total_price, 0);
   };
@@ -84,6 +88,7 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
       <h3 className="text-xl font-bold mb-4 text-gray-800">رزرو اتاق</h3>
       
       <div className="space-y-4">
+        {/* Date Picker and Duration Input (Unchanged) */}
         <div>
           <JalaliDatePicker
             label="تاریخ ورود"
@@ -112,16 +117,36 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
         </Button>
       </div>
 
+      {/* START FIX 3: Detailed Cart Summary */}
       {cartItems.length > 0 && (
         <div className="mt-6 border-t pt-4">
-          <h4 className="text-lg font-semibold mb-2">خلاصه رزرو</h4>
-          <div className="flex justify-between items-center text-gray-700">
-            <span>تعداد اتاق انتخاب شده:</span>
-            <span className="font-bold">{totalItems}</span>
-          </div>
-          <div className="flex justify-between items-center mt-2 text-gray-900">
-            <span className="font-bold">مبلغ کل:</span>
-            <span className="font-extrabold text-lg">{totalPrice.toLocaleString()} تومان</span>
+          <h4 className="text-lg font-semibold mb-3">خلاصه رزرو ({totalItems} اتاق)</h4>
+          
+          <ul className="space-y-3 mb-4">
+            {cartItems.map(item => (
+              <li key={item.id} className="flex justify-between items-start text-sm bg-gray-50 p-3 rounded-md border">
+                <div className="flex-grow">
+                  <p className="font-semibold text-gray-800">{item.room.name}</p>
+                  <p className="text-gray-600">
+                    <span className="font-medium">{item.quantity}</span> اتاق 
+                    (سرویس: {item.selected_board.name})
+                  </p>
+                  <p className="font-medium text-blue-600 mt-1">{item.total_price.toLocaleString()} تومان</p>
+                </div>
+                <button 
+                  onClick={() => onRemoveFromCart(item.id)}
+                  className="text-red-500 hover:text-red-700 transition-colors mr-2 flex-shrink-0"
+                  aria-label={`حذف ${item.room.name} از سبد خرید`}
+                >
+                  <XCircleIcon className="w-6 h-6" />
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <div className="flex justify-between items-center mt-4 border-t pt-3 text-gray-900">
+            <span className="font-bold text-xl">مبلغ کل:</span>
+            <span className="font-extrabold text-xl text-blue-700">{totalPrice.toLocaleString()} تومان</span>
           </div>
            <Button 
             onClick={() => router.push('/checkout')} 
@@ -131,6 +156,7 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
           </Button>
         </div>
       )}
+      {/* END FIX 3 */}
     </div>
   );
 };

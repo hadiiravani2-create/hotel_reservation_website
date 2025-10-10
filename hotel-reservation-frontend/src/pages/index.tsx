@@ -1,21 +1,17 @@
 // hotel-reservation-frontend/src/pages/index.tsx
-// version: 1.0.0
+// version: 2.0.0
 
 import Header from "../components/Header";
 import SearchForm from "../components/SearchForm";
 import Footer from "../components/Footer"; // Import the Footer component
-import { GetServerSideProps } from "next";
-import { getSiteSettings } from "../api/coreService";
-import { SiteSettings } from "../types/hotel";
 
-interface HomeProps {
-    settings: SiteSettings | null;
-}
+// Since Header component now fetches settings internally via useQuery (v0.0.3), 
+// we remove unnecessary getServerSideProps logic and SiteSettings dependency.
 
-export default function Home({ settings }: HomeProps) {
+export default function Home() {
     return (
         <div className="bg-gray-100 min-h-screen flex flex-col">
-            <Header settings={settings} />
+            <Header />
             <main className="container mx-auto p-4 flex-grow">
                 <div className="bg-white p-6 rounded-lg shadow-lg">
                     <h1 className="text-3xl font-bold mb-4 text-center">
@@ -24,25 +20,9 @@ export default function Home({ settings }: HomeProps) {
                     <SearchForm />
                 </div>
             </main>
-            <Footer /> {/* Add the Footer component here */}
+            <Footer />
         </div>
     );
 }
-
-export const getServerSideProps: GetServerSideProps = async () => {
-    try {
-        const settings = await getSiteSettings();
-        return {
-            props: {
-                settings,
-            },
-        };
-    } catch (error) {
-        console.error("Failed to fetch site settings:", error);
-        return {
-            props: {
-                settings: null,
-            },
-        };
-    }
-};
+// Removed getServerSideProps as settings fetching is now handled client-side in the Header component.
+// Removed imports: GetServerSideProps, getSiteSettings, SiteSettings.

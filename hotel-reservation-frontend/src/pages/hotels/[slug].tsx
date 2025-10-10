@@ -1,10 +1,12 @@
 // src/pages/hotels/[slug].tsx
-// version: 2.3.0
-// Feature: Pass 'duration' prop to RoomCard to show price calculation basis.
+// version: 3.0.0
+// Feature: Added handleRemoveFromCart and reservedRoomsMap for global capacity check.
+// Fix: Passed reservedRoomsMap to RoomCard to enforce capacity (Bug 2).
+// Fix: Passed onRemoveFromCart to BookingWidget (Issue 3).
 
 import { GetServerSideProps } from 'next';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react'; // Added useMemo, useCallback
 import { useRouter } from 'next/router';
 import { ParsedUrlQuery } from 'querystring';
 
@@ -48,14 +50,46 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleRoomsFetch = (rooms: AvailableRoom[]) => {
+  const handleRoomsFetch = useCallback((rooms: AvailableRoom[]) => {
     setAvailableRooms(rooms);
-  };
+  }, []);
 
-  const handleAddToCart = (newItem: CartItem) => {
+  // BUG 2: Calculate total reserved quantity for each room type ID, regardless of board type
+  const reservedRoomsMap = useMemo(() => {
+    return cartItems.reduce((acc, item) => {
+      const roomTypeId = item.room.id;
+      acc[roomTypeId] = (acc[roomTypeId] || 0) + item.quantity;
+      return acc;
+    }, {} as Record<number, number>);
+  }, [cartItems]);
+
+  const handleAddToCart = useCallback((newItem: CartItem) => {
     setCartItems((prevItems) => {
+      // 1. Find the existing item (same room type AND same board type)
       const existingItemIndex = prevItems.findIndex((item) => item.id === newItem.id);
+      
+      const targetRoom = availableRooms.find(r => r.id === newItem.room.id);
+      const roomMaxAvailable = targetRoom?.availability_quantity || 0;
+      
+      // 2. Calculate the quantity that will be added/updated
+      let quantityChange = newItem.quantity;
+      let newTotalReserved = reservedRoomsMap[newItem.room.id] || 0;
+      
+      if (existingItemIndex > -1) {
+        // If updating an existing item, remove its old quantity from the total before adding the new quantity
+        newTotalReserved -= prevItems[existingItemIndex].quantity;
+      }
+      newTotalReserved += newItem.quantity;
+      
+      // 3. BUG 2: Check if the new total reservation for this RoomType exceeds its availability
+      if (newTotalReserved > roomMaxAvailable) {
+          console.warn(`Cannot add/update. Total reserved rooms for ${newItem.room.name} exceeds availability of ${roomMaxAvailable}.`);
+          // Show alert to user (optional, but good practice)
+          alert(`خطا: مجموع تعداد اتاق‌های انتخابی (شامل سرویس‌های مختلف) برای ${newItem.room.name} از موجودی کل (${roomMaxAvailable} اتاق) فراتر می‌رود.`);
+          return prevItems; // Do not update the state
+      }
 
+      // 4. Update the cart
       if (existingItemIndex > -1) {
         const updatedItems = [...prevItems];
         updatedItems[existingItemIndex] = newItem;
@@ -65,7 +99,12 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
       }
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, [availableRooms, reservedRoomsMap]); // Dependency on reservedRoomsMap ensures capacity check logic is up-to-date
+
+  // FIX 3: Remove from cart function
+  const handleRemoveFromCart = useCallback((itemId: string) => {
+    setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
+  }, []);
 
   return (
     <div className="container mx-auto p-4 lg:p-8 bg-gray-50" dir="rtl">
@@ -101,7 +140,9 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
                                   key={room.id} 
                                   room={room} 
                                   onAddToCart={handleAddToCart}
-                                  duration={duration} // Pass duration to RoomCard
+                                  duration={duration} 
+                                  // BUG 2: Pass reserved rooms count for this specific room type
+                                  reservedCount={reservedRoomsMap[room.id] || 0}
                                 />
                             ))
                         ) : (
@@ -122,6 +163,8 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
             onRoomsFetch={handleRoomsFetch}
             setIsLoading={setIsLoading}
             cartItems={cartItems}
+            // FIX 3: Pass removal handler
+            onRemoveFromCart={handleRemoveFromCart}
           />
         </aside>
       </div>
