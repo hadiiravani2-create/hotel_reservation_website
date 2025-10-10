@@ -1,7 +1,7 @@
-// src/pages/checkout.tsx v2.1.13
-// FIX: Final fix for focus loss by removing the redundant PrincipalGuestForm wrapper and adding an explicit key={0} to the primary GuestInputForm.
-// FIX: Theming fix: Changed secondary guest form background to bg-blue-50 for better contrast.
-// Feature: All previous features included (Persian digits, Secondary guest toggle).
+// src/pages/checkout.tsx
+// version: 2.1.14
+// Feature: Implemented Guest Booking: removed mandatory login redirect and passed unauthenticated status to GuestInputForm.
+// Fix: Ensured 'wants_to_register' flag from GuestInputForm is included in the final booking payload.
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
@@ -58,6 +58,8 @@ const CHECKOUT_DATES_KEY = 'localDates';
 const CheckoutPage: React.FC = () => {
     const router = useRouter();
     const { isAuthenticated, isLoading: authLoading, user } = useAuth(); 
+    // NEW: Determine if the user is a guest (unauthenticated)
+    const isUnauthenticated = !isAuthenticated && !authLoading;
     const isAgencyUser = !!user?.agency_role;
     
     const [bookingDetails, setBookingDetails] = useState<BookingDetails | null>(null);
@@ -141,7 +143,7 @@ const CheckoutPage: React.FC = () => {
         }
     };
     
-    // Initial data load effect and Auth redirection
+    // Initial data load effect and Auth logic (MODIFIED)
     useEffect(() => {
         if (router.isReady) {
             const details = loadBookingDetailsFromCart();
@@ -150,10 +152,8 @@ const CheckoutPage: React.FC = () => {
             }
         }
         
-        if (!isAuthenticated && !authLoading) {
-             router.push('/login?next=/checkout');
-        }
-    }, [router.isReady, isAuthenticated, authLoading, router]);
+        // REMOVED: Forced redirection to login. Unauthenticated users can proceed.
+    }, [router.isReady, router]); // Dependencies simplified
 
 
     // Calculate total guests needed for forms
@@ -172,11 +172,18 @@ const CheckoutPage: React.FC = () => {
             // Fill with empty objects for forms, preserving existing data
              setGuestData(prev => {
                 // When totalGuestsCount increases/decreases, new empty slots are added or excess is trimmed.
-                const newArray = Array(totalGuestsCount).fill(null).map((_, i) => prev[i] || ({} as Partial<GuestPayload>));
+                const newArray = Array(totalGuestsCount).fill(null).map((_, i) => {
+                    const existingData = prev[i] || ({} as Partial<GuestPayload>);
+                    // If the user logs out, ensure the wants_to_register field is cleared/reset if it was true
+                    if (i === 0 && !isAuthenticated) {
+                        return { ...existingData, wants_to_register: false };
+                    }
+                    return existingData;
+                });
                 return newArray;
              });
         }
-    }, [totalGuestsCount, bookingDetails, guestData.length]);
+    }, [totalGuestsCount, bookingDetails, guestData.length, isAuthenticated]);
 
 
     // Handle changes in guest forms (Stabilized with useCallback and functional update)
@@ -267,6 +274,8 @@ const CheckoutPage: React.FC = () => {
                     extra_adults: r.adults, 
                     children_count: r.children, 
                 })),
+                // IMPORTANT: Pass user.id or null to correctly calculate agency/authenticated pricing
+                user_id: user?.id || null
             };
             
             // 2. Run Price Check (re-confirming price before booking)
@@ -278,8 +287,19 @@ const CheckoutPage: React.FC = () => {
                 setLoading(false);
                 return;
             }
-
+            
             // 3. Prepare Payload for Booking Submission (for CreateBooking API)
+            // Ensure wants_to_register is explicitly set for the principal guest if present
+            const finalGuests: GuestPayload[] = guestData.map((guest, index) => {
+                // Only for the principal guest, include wants_to_register if unauthenticated
+                if (index === 0 && isUnauthenticated) {
+                    return { ...guest, wants_to_register: guest.wants_to_register || false } as GuestPayload;
+                }
+                // For other guests or authenticated users, ensure wants_to_register is omitted or false
+                const { wants_to_register, ...rest } = guest;
+                return rest as GuestPayload;
+            })
+
             const bookingPayload: BookingPayload = {
                 check_in: bookingDetails.check_in,
                 check_out: bookingDetails.check_out,
@@ -292,10 +312,11 @@ const CheckoutPage: React.FC = () => {
                     children: r.children, 
                     extra_requests: roomExtraRequests[index], // Added extra_requests
                 })),
-                guests: guestData as GuestPayload[],
+                guests: finalGuests,
                 payment_method: paymentMethod,
-                rules_accepted: rulesAccepted, // Added rules acceptance
-                // NOTE: agency_id is omitted, relying on the view to check user's agency affiliation
+                rules_accepted: rulesAccepted, 
+                // Rely on request header for token/user ID. The backend will use request.user if available.
+                agency_id: null, // Omit agency_id here unless booking on behalf of an agency
             };
 
             // 4. Submit Booking
@@ -325,6 +346,7 @@ const CheckoutPage: React.FC = () => {
     };
     
     const CheckoutSummary = () => (
+        // ... (omitted for brevity)
         <div className="bg-blue-50 p-6 rounded-lg border border-blue-200" dir="rtl">
             <h3 className="text-xl font-bold mb-4 text-blue-800">خلاصه رزرو</h3>
             {bookingDetails ? (
@@ -366,8 +388,6 @@ const CheckoutPage: React.FC = () => {
             )}
         </div>
     );
-    
-    // We remove the PrincipalGuestForm function wrapper and render the GuestInputForm directly.
 
     if (!bookingDetails && !error) {
         return <div className="container mx-auto p-8" dir="rtl">در حال بارگذاری اطلاعات رزرو...</div>;
@@ -412,6 +432,7 @@ const CheckoutPage: React.FC = () => {
                                 isPrincipal={true}
                                 value={guestData[0] || {} as Partial<GuestPayload>}
                                 containerClass="bg-yellow-50" // Passed explicit background class
+                                isUnauthenticated={isUnauthenticated} // NEW: Pass unauthenticated status
                             />
                         </div>
 
@@ -428,7 +449,7 @@ const CheckoutPage: React.FC = () => {
                                 </Button>
 
                                 {showSecondaryGuests && (
-                                    <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-blue-50"> {/* FIX: Changed outer container BG to bg-blue-50 */}
+                                    <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-blue-50"> 
                                         {/* Rendering secondary guests starting from index 1 */}
                                         {Array.from({ length: totalGuestsCount - 1 }).map((_, listIndex) => {
                                             const guestIndex = listIndex + 1;
@@ -441,7 +462,8 @@ const CheckoutPage: React.FC = () => {
                                                   onChange={handleGuestChange}
                                                   isPrincipal={false}
                                                   value={guest} // <-- Using 'value' prop for controlled component
-                                                  containerClass="bg-blue-50" // FIX: Passed explicit background class
+                                                  containerClass="bg-blue-50" 
+                                                  isUnauthenticated={isUnauthenticated} // Pass this for consistency
                                                 />
                                             )
                                         })}

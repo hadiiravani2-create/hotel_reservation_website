@@ -1,6 +1,6 @@
 // src/api/pricingService.ts
-// version: 1.2.0
-// Final Version: Merged the new HotelDetails interface with the existing calculateMultiPrice function to support both the hotel details and checkout pages.
+// version: 1.2.1
+// FIX: Added optional 'user_id' field to MultiPriceData interface to resolve TypeScript error in checkout.tsx and support authenticated/guest pricing checks.
 
 import api from './coreService';
 import { AvailableRoom } from '@/types/hotel'; // Using the standardized, correct type
@@ -34,6 +34,8 @@ export interface MultiPriceData {
       extra_adults: number;
       children_count: number;
     }>;
+    // FIX: Added optional user_id to support correct pricing calculation based on user/agency status
+    user_id?: number | null; 
 }
 
 // Endpoint: /pricing/api/calculate-multi-price/

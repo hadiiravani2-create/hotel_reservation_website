@@ -1,6 +1,6 @@
-// src/components/GuestInputForm.tsx v2.1.7
-// FIX: Finalized conditional rendering of National ID / Passport fields (hiding instead of disabling).
-// Feature: Added containerClass prop for flexible styling by the parent.
+// src/components/GuestInputForm.tsx
+// version: 2.1.8
+// Feature: Added 'wants_to_register' field option for principal guest during guest booking.
 
 import React, { memo } from 'react'; 
 import { Input } from './ui/Input'; 
@@ -11,15 +11,16 @@ interface GuestInputFormProps {
     onChange: (index: number, data: Partial<GuestPayload>) => void;
     isPrincipal: boolean;
     value: Partial<GuestPayload>; 
-    containerClass?: string; // New prop for overriding the default background
+    containerClass?: string;
+    // NEW: Prop to indicate if the user is unauthenticated (Guest Booking flow)
+    isUnauthenticated?: boolean; 
 }
 
-const GuestInputForm = ({ index, onChange, isPrincipal, value, containerClass }: GuestInputFormProps) => { // <-- Destructure containerClass
+const GuestInputForm = ({ index, onChange, isPrincipal, value, containerClass, isUnauthenticated }: GuestInputFormProps) => { // <-- Destructure new prop
     
     const guestData = value; 
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        // ... (omitted handleChange logic - remains the same as v2.1.6)
         const { name, value, type, checked } = e.target;
         
         let newValue: string | boolean = type === 'checkbox' ? checked : value;
@@ -36,8 +37,14 @@ const GuestInputForm = ({ index, onChange, isPrincipal, value, containerClass }:
                 national_id: isForeignValue ? '' : guestData.national_id, 
                 passport_number: isForeignValue ? guestData.passport_number : '',
                 nationality: isForeignValue ? guestData.nationality : '',
+                // Preserve wants_to_register state
+                wants_to_register: guestData.wants_to_register
             };
-        } else {
+        } else if (name === 'wants_to_register') {
+             // Handle the new wants_to_register checkbox
+            updatedData = { [name]: checked } as Partial<GuestPayload>;
+        } 
+        else {
             // For other fields, send a single field update
             const stringValue = newValue as string;
             updatedData = { [name]: stringValue } as Partial<GuestPayload>;
@@ -101,8 +108,24 @@ const GuestInputForm = ({ index, onChange, isPrincipal, value, containerClass }:
                     />
                     <label className="text-sm font-medium">میهمان خارجی است</label>
                 </div>
-                {/* Placeholder for alignment (always present in this row) */}
-                <div></div>
+                {/* Placeholder or Registration Option */}
+                {isPrincipal && isUnauthenticated ? (
+                    // NEW: Show register option for unauthenticated principal guest
+                    <div className="flex items-center mt-6">
+                        <input
+                            type="checkbox"
+                            name="wants_to_register"
+                            checked={guestData.wants_to_register || false}
+                            onChange={handleChange}
+                            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 ml-2"
+                        />
+                        <label className="text-sm font-medium text-green-700">
+                            میخواهم با این اطلاعات در سایت ثبت نام کنم (اختیاری)
+                        </label>
+                    </div>
+                ) : (
+                    <div></div> // Ensures alignment if option is hidden
+                )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">

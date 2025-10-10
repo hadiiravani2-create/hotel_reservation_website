@@ -1,7 +1,6 @@
-// src/api/reservationService.ts v1.1.0
-// Feature: Added city_of_origin to GuestPayload.
-// Feature: Added extra_requests to BookingRoom payload.
-// Feature: Added 'card_to_card' to payment_method choices.
+// src/api/reservationService.ts
+// version: 1.2.0
+// Feature: Added optional 'wants_to_register' field to GuestPayload to support optional user registration during guest booking.
 import api from './coreService'; // نمونه Axios پیکربندی شده
 
 // Define GuestPayload interface (based on GuestInputForm.tsx)
@@ -13,8 +12,9 @@ export interface GuestPayload {
   passport_number: string;
   phone_number: string;
   nationality: string;
-  // New field
+  // New fields
   city_of_origin?: string | null; 
+  wants_to_register?: boolean; // NEW: Added for optional registration support (maps to serializer field)
 }
 
 // Endpoint: /reservations/bookings/
@@ -36,15 +36,19 @@ export interface BookingPayload {
   payment_method: 'online' | 'credit' | 'in_person' | 'card_to_card'; 
   // New field for rules acceptance (write_only field on serializer)
   rules_accepted: boolean;
+  // Optional field for agency booking (if an authorized agency user is booking)
+  agency_id?: number | null;
 }
 
 interface BookingResponse {
   booking_code: string;
+  total_price: number;
   // ... other details
 }
 
 // Final booking submission
 export const createBooking = async (data: BookingPayload): Promise<BookingResponse> => {
+  // Authentication is optional for this endpoint (Guest Booking support)
   const response = await api.post('/reservations/bookings/', data);
   return response.data;
 };
