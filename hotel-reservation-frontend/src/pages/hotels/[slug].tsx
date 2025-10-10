@@ -1,10 +1,11 @@
 // src/pages/hotels/[slug].tsx
-// version: 2.2.0
-// Fix: Added a utility function to convert Persian numerals to English in dates from URL params to fix parsing issues.
+// version: 2.3.0
+// Feature: Pass 'duration' prop to RoomCard to show price calculation basis.
 
 import { GetServerSideProps } from 'next';
 import Image from 'next/image';
 import { useState } from 'react';
+import { useRouter } from 'next/router';
 import { ParsedUrlQuery } from 'querystring';
 
 // --- API and Type Imports ---
@@ -17,11 +18,6 @@ import RoomCard from '@/components/RoomCard';
 import { UserGroupIcon } from '@heroicons/react/24/outline';
 
 // --- Utility Functions ---
-/**
- * Converts Persian/Arabic digits in a string to English digits.
- * @param str The string to convert.
- * @returns The converted string.
- */
 const toEnglishDigits = (str: string | null | undefined): string => {
     if (!str) return '';
     const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
@@ -35,8 +31,8 @@ const toEnglishDigits = (str: string | null | undefined): string => {
 
 
 interface HotelPageProps {
-  hotel: HotelDetails; // Basic hotel data fetched server-side
-  initialRooms: AvailableRoom[]; // Rooms list, possibly empty if no date in URL
+  hotel: HotelDetails;
+  initialRooms: AvailableRoom[];
 }
 
 interface ContextParams extends ParsedUrlQuery {
@@ -44,49 +40,42 @@ interface ContextParams extends ParsedUrlQuery {
 }
 
 const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
-  // State for rooms, initialized by server, updated by client
+  const router = useRouter();
+  const { duration: durationFromQuery } = router.query;
+  const duration = parseInt(durationFromQuery as string, 10) || 1;
+  
   const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>(initialRooms);
-  // State for the local shopping cart
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  // State to show a loading indicator over the rooms list
   const [isLoading, setIsLoading] = useState(false);
 
-  // Handler for BookingWidget to update the parent page's room list
   const handleRoomsFetch = (rooms: AvailableRoom[]) => {
     setAvailableRooms(rooms);
   };
 
-  // Handler for RoomCard to add/update items in the cart
   const handleAddToCart = (newItem: CartItem) => {
     setCartItems((prevItems) => {
       const existingItemIndex = prevItems.findIndex((item) => item.id === newItem.id);
 
       if (existingItemIndex > -1) {
-        // If item with the same room and board type exists, update it
         const updatedItems = [...prevItems];
         updatedItems[existingItemIndex] = newItem;
         return updatedItems;
       } else {
-        // Otherwise, add as a new item
         return [...prevItems, newItem];
       }
     });
-     // Optional: Scroll to the booking widget to show the updated cart summary
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
     <div className="container mx-auto p-4 lg:p-8 bg-gray-50" dir="rtl">
-      {/* Hotel Header */}
       <header className="mb-8">
           <h1 className="text-4xl font-extrabold text-gray-800">{hotel.name}</h1>
           <p className="text-lg text-gray-600 mt-1">{hotel.stars} ستاره - {hotel.address}</p>
       </header>
 
       <div className="flex flex-col lg:flex-row gap-8">
-        {/* Main Content Column */}
         <main className="w-full lg:w-2/3">
-            {/* Image Gallery */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-8 h-96 rounded-lg overflow-hidden shadow-lg">
                 <div className="col-span-2 row-span-2 relative">
                     <Image src={hotel.images[0]?.image || '/placeholder.png'} layout="fill" objectFit="cover" alt={hotel.name} priority />
@@ -98,7 +87,6 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
                 ))}
             </div>
 
-            {/* Rooms Section */}
             <section id="rooms-section">
                 <h2 className="text-3xl font-bold mb-6 border-b pb-3">انتخاب اتاق</h2>
                 {isLoading ? (
@@ -109,7 +97,12 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
                     <div className="space-y-6">
                         {availableRooms.length > 0 ? (
                             availableRooms.map((room) => (
-                                <RoomCard key={room.id} room={room} onAddToCart={handleAddToCart} />
+                                <RoomCard 
+                                  key={room.id} 
+                                  room={room} 
+                                  onAddToCart={handleAddToCart}
+                                  duration={duration} // Pass duration to RoomCard
+                                />
                             ))
                         ) : (
                             <div className="text-center p-10 bg-gray-100 rounded-md border">
@@ -123,7 +116,6 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
             </section>
         </main>
 
-        {/* Sidebar Column */}
         <aside className="w-full lg:w-1/3">
           <BookingWidget 
             hotelSlug={hotel.slug}
@@ -137,19 +129,13 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
   );
 };
 
-// Fetches initial data on the server
 export const getServerSideProps: GetServerSideProps = async (context) => {
     const { slug } = context.params as ContextParams;
     const { check_in, duration } = context.query;
 
     try {
-        // Sanitize check_in date by converting Persian/Arabic numerals to English
         const sanitizedCheckIn = toEnglishDigits(check_in as string);
-
-        // Fetch hotel details. If dates are provided, it will include priced rooms.
         const hotel = await getHotelDetails(slug, sanitizedCheckIn, duration as string);
-        
-        // available_rooms will be populated if check_in and duration are valid
         const initialRooms = hotel.available_rooms || [];
         
         return { 
@@ -160,7 +146,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         };
     } catch (error) {
         console.error('Failed to fetch initial hotel details:', error);
-        // If hotel is not found or another error occurs, show a 404 page
         return { notFound: true };
     }
 };

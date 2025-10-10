@@ -1,6 +1,6 @@
 // src/components/BookingWidget.tsx
-// version: 1.1.0
-// Fix: Added a utility function to convert Persian numerals to English for dates from URL, ensuring correct date parsing.
+// version: 1.1.2
+// Fix: Reverted property name to 'total_price' to match the definitive CartItem interface (v1.0.1).
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
@@ -11,15 +11,10 @@ import { HotelDetails } from '@/api/pricingService';
 import { CartItem } from '@/types/hotel';
 
 // Custom components
-import { JalaliDatePicker } from './ui/JalaliDatePicker'; // Your component
+import { JalaliDatePicker } from './ui/JalaliDatePicker';
 import { Button } from './ui/Button';
 
-// --- Utility Functions ---
-/**
- * Converts Persian/Arabic digits in a string to English digits.
- * @param str The string to convert.
- * @returns The converted string.
- */
+// Utility Functions
 const toEnglishDigits = (str: string | null | undefined): string => {
     if (!str) return '';
     const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
@@ -31,8 +26,6 @@ const toEnglishDigits = (str: string | null | undefined): string => {
     return newStr;
 };
 
-
-// Define the props for the component
 interface BookingWidgetProps {
   hotelSlug: string;
   onRoomsFetch: (rooms: HotelDetails['available_rooms']) => void;
@@ -44,7 +37,6 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
   const router = useRouter();
   const { query } = router;
 
-  // Sanitize check_in from query params before parsing
   const sanitizedCheckIn = query.check_in && typeof query.check_in === 'string' ? toEnglishDigits(query.check_in) : null;
 
   const [checkInDate, setCheckInDate] = useState<Moment | null>(
@@ -55,15 +47,8 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
   );
 
   useEffect(() => {
-    // This effect should ideally run only when the component mounts with valid query params.
-    // The handleAvailabilityCheck is now primarily user-driven via the button.
-    if (checkInDate && duration > 0) {
-      // To avoid an infinite loop or unnecessary re-fetches, you might want to reconsider this initial auto-fetch
-      // or add more checks, e.g., if rooms haven't been loaded yet.
-      // For now, it matches the original logic.
-      // handleAvailabilityCheck(); 
-    }
-  }, []); // Intentionally left dependency array to run only once on mount based on initial state.
+    // Initial fetch is handled by getServerSideProps, subsequent fetches are manual.
+  }, []); 
 
   const handleAvailabilityCheck = async () => {
     if (!checkInDate) {
@@ -86,6 +71,7 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
     }
   };
   
+  // Corrected the property accessor back to snake_case 'total_price'
   const calculateCartTotal = () => {
     return cartItems.reduce((total, item) => total + item.total_price, 0);
   };

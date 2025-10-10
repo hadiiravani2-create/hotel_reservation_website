@@ -1,29 +1,34 @@
 // src/components/RoomCard.tsx
-// version: 1.0.0
-// Feature: A responsive card component to display room details, board options, and handle adding to the cart.
+// version: 1.1.0
+// Feature: Added duration display and filtering for unavailable boards.
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { AvailableRoom, PricedBoardType, CartItem } from '@/types/hotel';
 import { Button } from './ui/Button';
-import { UserGroupIcon, WifiIcon } from '@heroicons/react/24/outline'; // Example icons
+import { UserGroupIcon } from '@heroicons/react/24/outline';
 
 interface RoomCardProps {
   room: AvailableRoom;
+  duration: number; // Duration in nights
   onAddToCart: (item: CartItem) => void;
 }
 
-const RoomCard: React.FC<RoomCardProps> = ({ room, onAddToCart }) => {
+const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart }) => {
+  // Filter available boards first
+  const availableBoards = room.priced_board_types.filter(p => p.total_price > 0);
+  
   // State to hold the selected board type. Initialize with the first available option.
   const [selectedBoard, setSelectedBoard] = useState<PricedBoardType | null>(
-    room.priced_board_types.length > 0 ? room.priced_board_types[0] : null
+    availableBoards.length > 0 ? availableBoards[0] : null
   );
   // State for the quantity of rooms to book
   const [quantity, setQuantity] = useState<number>(1);
 
   // Effect to reset selection if room data changes
   useEffect(() => {
-    setSelectedBoard(room.priced_board_types.length > 0 ? room.priced_board_types[0] : null);
+    const newAvailableBoards = room.priced_board_types.filter(p => p.total_price > 0);
+    setSelectedBoard(newAvailableBoards.length > 0 ? newAvailableBoards[0] : null);
     setQuantity(1);
   }, [room]);
 
@@ -42,7 +47,7 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, onAddToCart }) => {
         name: selectedBoard.board_type.name,
       },
       quantity: quantity,
-      price_per_room: selectedBoard.total_price,
+      price_per_room: selectedBoard.total_price, // This is the total price for the whole duration
       total_price: selectedBoard.total_price * quantity,
     };
     onAddToCart(cartItem);
@@ -81,9 +86,11 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, onAddToCart }) => {
 
       {/* Board Selection Section */}
       <div className="flex-grow md:border-r md:border-l px-4">
-        <p className="font-semibold mb-2">نوع سرویس خود را انتخاب کنید:</p>
+        <p className="font-semibold mb-2">
+          قیمت کل برای <span className="text-blue-600">{duration}</span> شب اقامت:
+        </p>
         <div className="space-y-2">
-          {room.priced_board_types.map((pricedBoard) => (
+          {availableBoards.map((pricedBoard) => (
             <div
               key={pricedBoard.board_type.id}
               onClick={() => setSelectedBoard(pricedBoard)}
