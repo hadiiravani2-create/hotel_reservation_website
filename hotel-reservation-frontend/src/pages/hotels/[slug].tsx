@@ -1,12 +1,10 @@
 // src/pages/hotels/[slug].tsx
-// version: 3.0.0
-// Feature: Added handleRemoveFromCart and reservedRoomsMap for global capacity check.
-// Fix: Passed reservedRoomsMap to RoomCard to enforce capacity (Bug 2).
-// Fix: Passed onRemoveFromCart to BookingWidget (Issue 3).
+// version: 3.0.2
+// FIX: Version bump to clear potential Turbopack parsing error related to incomplete code blocks/comments.
 
 import { GetServerSideProps } from 'next';
 import Image from 'next/image';
-import { useState, useMemo, useCallback } from 'react'; // Added useMemo, useCallback
+import { useState, useMemo, useCallback } from 'react'; 
 import { useRouter } from 'next/router';
 import { ParsedUrlQuery } from 'querystring';
 
@@ -18,7 +16,8 @@ import { AvailableRoom, CartItem } from '@/types/hotel';
 import BookingWidget from '@/components/BookingWidget';
 import RoomCard from '@/components/RoomCard';
 import { UserGroupIcon } from '@heroicons/react/24/outline';
-import moment, { Moment } from 'moment-jalaali';
+import moment from 'moment-jalaali';
+import { useAuth } from '@/hooks/useAuth'; 
 
 // --- Utility Functions ---
 const toEnglishDigits = (str: string | null | undefined): string => {
@@ -46,6 +45,8 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
   const router = useRouter();
   const { duration: durationFromQuery } = router.query;
   const duration = parseInt(durationFromQuery as string, 10) || 1;
+  
+  const { user } = useAuth(); 
   
   const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>(initialRooms);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -164,8 +165,9 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
             onRoomsFetch={handleRoomsFetch}
             setIsLoading={setIsLoading}
             cartItems={cartItems}
-            // FIX 3: Pass removal handler
             onRemoveFromCart={handleRemoveFromCart}
+            // NEW: Pass the authenticated user's ID to the widget
+            userId={user?.id || null} 
           />
         </aside>
       </div>

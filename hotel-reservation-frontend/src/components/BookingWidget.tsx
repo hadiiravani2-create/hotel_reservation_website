@@ -1,15 +1,15 @@
 // src/components/BookingWidget.tsx
-// version: 3.0.2
-// Fix: Changed Moment type reference to typeof moment.Moment to resolve the "Cannot find name 'Moment'" error.
+// version: 3.0.3
+// Feature: Accepted userId and passed it to getHotelDetails for correct dynamic pricing check.
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import moment from 'moment-jalaali'; // FIX: Removed { Moment } from import
-// ... (سایر ایمپورت‌ها)
-import { getHotelDetails } from '@/api/pricingService';
+import moment from 'moment-jalaali';
+// FIX: The API service needs to be updated to accept the userId parameter
+import { getHotelDetails } from '@/api/pricingService'; 
 import { HotelDetails } from '@/api/pricingService';
 import { CartItem } from '@/types/hotel';
-import { XCircleIcon } from '@heroicons/react/24/outline'; // Icon for removal
+import { XCircleIcon } from '@heroicons/react/24/outline';
 
 // Custom components
 import { JalaliDatePicker } from './ui/JalaliDatePicker';
@@ -35,15 +35,16 @@ const toEnglishDigits = (str: string | null | undefined): string => {
 };
 
 interface BookingWidgetProps {
-// ... (remains unchanged) ...
   hotelSlug: string;
   onRoomsFetch: (rooms: HotelDetails['available_rooms']) => void;
   setIsLoading: (isLoading: boolean) => void;
   cartItems: CartItem[];
   onRemoveFromCart: (itemId: string) => void;
+  // NEW: Accept userId for pricing checks
+  userId: number | null; 
 }
 
-const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, setIsLoading, cartItems, onRemoveFromCart }) => {
+const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, setIsLoading, cartItems, onRemoveFromCart, userId }) => { // <-- Accepted new prop
   const router = useRouter();
   const { query } = router;
 
@@ -70,9 +71,16 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
     try {
       const formattedCheckIn = checkInDate.format('jYYYY-jMM-jDD');
       
+      // Update URL first
       router.push(`/hotels/${hotelSlug}?check_in=${formattedCheckIn}&duration=${duration}`, undefined, { shallow: true });
 
-      const hotelDetails = await getHotelDetails(hotelSlug, formattedCheckIn, duration.toString());
+      // Fetch details, passing userId for accurate pricing
+      const hotelDetails = await getHotelDetails(
+        hotelSlug, 
+        formattedCheckIn, 
+        duration.toString(),
+        userId // NEW: Pass the authenticated user ID
+      ); 
       onRoomsFetch(hotelDetails.available_rooms || []);
     } catch (error) {
       console.error("Failed to fetch room availability:", error);

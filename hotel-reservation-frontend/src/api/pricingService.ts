@@ -1,11 +1,11 @@
 // src/api/pricingService.ts
-// version: 1.2.1
-// FIX: Added optional 'user_id' field to MultiPriceData interface to resolve TypeScript error in checkout.tsx and support authenticated/guest pricing checks.
+// version: 1.2.3
+// FIX: Confirmed explicit export of searchHotels, SearchParams, and HotelSearchResult to resolve compilation error in search.tsx.
 
 import api from './coreService';
-import { AvailableRoom } from '@/types/hotel'; // Using the standardized, correct type
+import { AvailableRoom } from '@/types/hotel'; 
 
-// --- START: Final, Corrected HotelDetails Interface ---
+// --- START: HotelDetails Interface (Unchanged) ---
 export interface HotelDetails {
     id: number;
     name: string;
@@ -18,12 +18,11 @@ export interface HotelDetails {
     rules: string | null;
     check_in_time: string | null;
     check_out_time: string | null;
-    // Uses the correct, detailed room structure from types/hotel.d.ts
     available_rooms: AvailableRoom[]; 
 }
-// --- END: Final, Corrected HotelDetails Interface ---
+// --- END: HotelDetails Interface ---
 
-// --- START: Retained from your v1.0.2 for checkout page compatibility ---
+// --- START: MultiPriceData (Unchanged) ---
 export interface MultiPriceData {
     check_in: string;
     check_out: string;
@@ -34,7 +33,6 @@ export interface MultiPriceData {
       extra_adults: number;
       children_count: number;
     }>;
-    // FIX: Added optional user_id to support correct pricing calculation based on user/agency status
     user_id?: number | null; 
 }
 
@@ -43,9 +41,10 @@ export const calculateMultiPrice = async (data: MultiPriceData): Promise<{ total
     const response = await api.post('/pricing/api/calculate-multi-price/', data);
     return response.data;
 };
-// --- END: Retained from your v1.0.2 ---
+// --- END: MultiPriceData ---
 
-// --- Other existing functions ---
+// --- Hotel Search Functions ---
+
 export interface SearchParams { 
   city_id: number;
   check_in: string;    
@@ -61,20 +60,26 @@ export interface HotelSearchResult {
   min_price: number;
 }
 
+// Exported function required by search.tsx
 export const searchHotels = async (params: SearchParams): Promise<HotelSearchResult[]> => {
   const response = await api.get('/pricing/api/search/', { params });
   return response.data;
 };
 
-// This function now correctly returns the new HotelDetails type
+
+// --- Other existing functions ---
+
+// This function now accepts and includes user_id in the request parameters
 export const getHotelDetails = async (
     slug: string,
     check_in?: string,
-    duration?: string
+    duration?: string,
+    user_id?: number | null 
 ): Promise<HotelDetails> => {
-    const params: { [key: string]: string | undefined } = {};
+    const params: { [key: string]: string | number | undefined } = {};
     if (check_in) params.check_in = check_in;
     if (duration) params.duration = duration;
+    if (user_id) params.user_id = user_id; 
 
     const response = await api.get<HotelDetails>(`/hotels/api/hotels/${slug}/`, { params });
     return response.data;
