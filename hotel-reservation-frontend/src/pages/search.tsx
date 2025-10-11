@@ -1,7 +1,9 @@
 // src/pages/search.tsx
+// version: 0.0.2
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/router';
+import Image from 'next/image'; 
 import { searchHotels, getAmenities, SearchParams as ApiSearchParams, HotelSearchResult } from '../api/pricingService';
 import { Button } from '../components/ui/Button';
 import Link from 'next/link';
@@ -30,35 +32,52 @@ interface FilterSidebarProps {
 
 // --- Sub-Components ---
 
-// FIX: Corrected the incomplete JSX in the HotelCard component
-const HotelCard: React.FC<{ hotel: HotelSearchResult }> = ({ hotel }) => (
-    <div className="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col md:flex-row mb-6 hover:shadow-xl transition-shadow duration-300">
-        <div className="md:w-1/3">
-            <div className="bg-gray-200 h-48 md:h-full flex items-center justify-center">
-                <span className="text-gray-500">تصویر هتل</span>
+// FIX: Corrected access to nested image URL within the main_image object
+const HotelCard: React.FC<{ hotel: HotelSearchResult }> = ({ hotel }) => {
+    // Attempt to access the nested image URL, common pattern for DRF Serializers
+    const imageUrl = (hotel as any).main_image?.image || null; 
+
+    return (
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col md:flex-row mb-6 hover:shadow-xl transition-shadow duration-300">
+            {/* Image Container - Needs relative positioning and defined height */}
+            <div className="md:w-1/3 relative flex-shrink-0 h-48 md:h-auto">
+                {/* Check if a valid image URL was found */}
+                {imageUrl ? (
+                    <Image
+                        src={imageUrl} 
+                        alt={hotel.hotel_name}
+                        layout="fill"
+                        objectFit="cover"
+                        className="object-cover"
+                    />
+                ) : (
+                    <div className="bg-gray-200 h-full w-full flex items-center justify-center">
+                        <span className="text-gray-500">تصویر هتل</span>
+                    </div>
+                )}
             </div>
-        </div>
-        <div className="p-6 flex-1 flex flex-col justify-between">
-            <div>
-                <h4 className="text-xl font-bold text-gray-900">{hotel.hotel_name}</h4>
-                <p className="text-yellow-500 mt-1">
-                    {Array.from({ length: hotel.hotel_stars }, (_, i) => <span key={i}>⭐</span>)}
-                </p>
-                <p className="text-sm text-gray-500 mt-2">آدرس هتل در اینجا...</p>
-            </div>
-            <div className="flex justify-between items-center mt-4">
-                <div className="text-primary-brand font-extrabold text-2xl">
-                    <span className="text-sm font-normal text-gray-600">شروع قیمت از </span>
-                    {hotel.min_price.toLocaleString('fa')}
-                    <span className="text-sm font-normal text-gray-600"> تومان</span>
+            <div className="p-6 flex-1 flex flex-col justify-between">
+                <div>
+                    <h4 className="text-xl font-bold text-gray-900">{hotel.hotel_name}</h4>
+                    <p className="text-yellow-500 mt-1">
+                        {Array.from({ length: hotel.hotel_stars }, (_, i) => <span key={i}>⭐</span>)}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2">آدرس هتل در اینجا...</p>
                 </div>
-                <Link href={`/hotels/${hotel.hotel_slug}?check_in=${useRouter().query.check_in}&duration=${useRouter().query.duration}`}>
-                    <Button className="!w-auto px-6">مشاهده و رزرو</Button>
-                </Link>
+                <div className="flex justify-between items-center mt-4">
+                    <div className="text-primary-brand font-extrabold text-2xl">
+                        <span className="text-sm font-normal text-gray-600">شروع قیمت از </span>
+                        {hotel.min_price.toLocaleString('fa')}
+                        <span className="text-sm font-normal text-gray-600"> تومان</span>
+                    </div>
+                    <Link href={`/hotels/${hotel.hotel_slug}?check_in=${useRouter().query.check_in}&duration=${useRouter().query.duration}`}>
+                        <Button className="!w-auto px-6">مشاهده و رزرو</Button>
+                    </Link>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 const FilterSidebar: React.FC<FilterSidebarProps> = ({ setFilter }) => {
     const { data: amenities } = useQuery<Amenity[]>({

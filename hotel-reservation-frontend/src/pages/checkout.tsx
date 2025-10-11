@@ -1,31 +1,33 @@
 // src/pages/checkout.tsx
-// version: 2.1.14
-// Feature: Implemented Guest Booking: removed mandatory login redirect and passed unauthenticated status to GuestInputForm.
-// Fix: Ensured 'wants_to_register' flag from GuestInputForm is included in the final booking payload.
+// version: 2.2.2
+// Feature: Converted to two-step checkout: Registers booking as 'pending' and redirects to /payment/[code] page.
+// Fix: Incorporated previous fixes for extra guest capacity logic.
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../hooks/useAuth';
 import { calculateMultiPrice, MultiPriceData } from '../api/pricingService';
-import { createBooking, initiatePayment, BookingPayload, GuestPayload } from '../api/reservationService';
+import { createBooking, BookingPayload, GuestPayload } from '../api/reservationService';
 import { Button } from '../components/ui/Button';
 import GuestInputForm from '../components/GuestInputForm'; 
 import { Input } from '../components/ui/Input'; 
 import moment from 'moment-jalaali';
 import { CartItem } from '../types/hotel'; 
+import Header from '../components/Header'; // Added Header
+import Footer from '../components/Footer'; // Added Footer
 
 // Utility function to convert English digits to Persian digits
 const toPersianDigits = (str: string | number) => {
     return String(str).replace(/\d/g, (d) => ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'][parseInt(d)]);
 };
 
-// --- Interface with new fields ---
+// --- Interface with all required fields (including max capacities from previous fixes) ---
 interface RoomBookingDetail {
     room_type_id: number;
     board_type_id: number;
     quantity: number;
-    adults: number; // extra persons
-    children: number;
+    adults: number; // extra persons (user selected)
+    children: number; // children count (user selected)
     price_per_room_total: number;
     
     // Display fields
@@ -34,10 +36,11 @@ interface RoomBookingDetail {
     check_in: string; 
     check_out: string; 
     base_capacity: number;
-    extra_adults_count: number; 
-    children_count: number;
+    
+    // Max capacities (Assumed to be loaded with correct data, using default 2 as fallback)
+    max_extra_adults: number; 
+    max_children: number; 
 
-    // New field for extra requests (Frontend only for data gathering)
     extra_requests: string;
 }
 
@@ -49,35 +52,28 @@ interface BookingDetails {
     total_base_capacity: number; 
 }
 
-// Defining a type for Payment methods explicitly
-type PaymentMethod = 'online' | 'credit' | 'in_person' | 'card_to_card';
-
 const CHECKOUT_CART_KEY = 'localCart';
 const CHECKOUT_DATES_KEY = 'localDates';
 
 const CheckoutPage: React.FC = () => {
     const router = useRouter();
     const { isAuthenticated, isLoading: authLoading, user } = useAuth(); 
-    // NEW: Determine if the user is a guest (unauthenticated)
     const isUnauthenticated = !isAuthenticated && !authLoading;
     const isAgencyUser = !!user?.agency_role;
     
     const [bookingDetails, setBookingDetails] = useState<BookingDetails | null>(null);
     const [guestData, setGuestData] = useState<Partial<GuestPayload>[]>([]);
-    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('online');
+    // Removed paymentMethod state
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [finalPrice, setFinalPrice] = useState(0); 
     const [rulesAccepted, setRulesAccepted] = useState(false); 
     
-    // State for per-room extra requests
     const [roomExtraRequests, setRoomExtraRequests] = useState<string[]>([]);
-    
-    // New state for managing visibility of secondary guests
     const [showSecondaryGuests, setShowSecondaryGuests] = useState(false);
 
 
-    // Utility function to load data from LocalStorage
+    // Utility function to load data from LocalStorage (Adapted to include max capacities)
     const loadBookingDetailsFromCart = () => {
         try {
             const cartItemsJson = localStorage.getItem(CHECKOUT_CART_KEY);
@@ -102,7 +98,10 @@ const CheckoutPage: React.FC = () => {
             let cartTotalPrice = 0;
             
             const rooms: RoomBookingDetail[] = cartItems.map(item => {
-                const assumedBaseCapacity = 2; 
+                const assumedBaseCapacity = 2; // This should ideally come from RoomType object
+                const assumedMaxExtraAdults = 2; 
+                const assumedMaxChildren = 2;     
+                
                 totalCapacity += item.quantity * assumedBaseCapacity;
                 cartTotalPrice += item.total_price;
 
@@ -111,7 +110,7 @@ const CheckoutPage: React.FC = () => {
                     board_type_id: item.selected_board.id,
                     quantity: item.quantity,
                     adults: 0, 
-                    children: 0,
+                    children: 0, 
                     
                     price_per_room_total: item.total_price, 
                     room_name: item.room.name,
@@ -119,14 +118,14 @@ const CheckoutPage: React.FC = () => {
                     check_in: dates.check_in,
                     check_out: checkOutDate,
                     base_capacity: assumedBaseCapacity,
-                    extra_adults_count: 0,
-                    children_count: 0,
-                    extra_requests: '', // Initialize extra requests
+                    max_extra_adults: assumedMaxExtraAdults, 
+                    max_children: assumedMaxChildren, 
+                    extra_requests: '', 
                 };
             });
             
             setFinalPrice(cartTotalPrice); 
-            setRoomExtraRequests(rooms.map(r => r.extra_requests)); // Initialize requests array
+            setRoomExtraRequests(rooms.map(r => r.extra_requests)); 
             
             return {
                 check_in: dates.check_in,
@@ -143,7 +142,7 @@ const CheckoutPage: React.FC = () => {
         }
     };
     
-    // Initial data load effect and Auth logic (MODIFIED)
+    // Initial data load effect
     useEffect(() => {
         if (router.isReady) {
             const details = loadBookingDetailsFromCart();
@@ -151,17 +150,15 @@ const CheckoutPage: React.FC = () => {
                 setBookingDetails(details);
             }
         }
-        
-        // REMOVED: Forced redirection to login. Unauthenticated users can proceed.
-    }, [router.isReady, router]); // Dependencies simplified
+    }, [router.isReady]); 
 
 
     // Calculate total guests needed for forms
     const totalGuestsCount = useMemo(() => {
         if (!bookingDetails) return 0;
-        // Total guests = Sum of (quantity * (base_capacity + adults + children))
+        // Total guests = Sum of (quantity * base_capacity + adults + children) for all rooms
         return bookingDetails.rooms.reduce((total: number, room: RoomBookingDetail) => {
-            return total + room.quantity * (room.base_capacity + room.adults + room.children);
+            return total + (room.base_capacity * room.quantity) + (room.adults) + (room.children);
         }, 0);
     }, [bookingDetails]);
 
@@ -169,12 +166,9 @@ const CheckoutPage: React.FC = () => {
     // Guest data setup: Ensures the array has the correct size and is never undefined
     useEffect(() => {
         if (bookingDetails && guestData.length !== totalGuestsCount) {
-            // Fill with empty objects for forms, preserving existing data
              setGuestData(prev => {
-                // When totalGuestsCount increases/decreases, new empty slots are added or excess is trimmed.
                 const newArray = Array(totalGuestsCount).fill(null).map((_, i) => {
                     const existingData = prev[i] || ({} as Partial<GuestPayload>);
-                    // If the user logs out, ensure the wants_to_register field is cleared/reset if it was true
                     if (i === 0 && !isAuthenticated) {
                         return { ...existingData, wants_to_register: false };
                     }
@@ -186,30 +180,53 @@ const CheckoutPage: React.FC = () => {
     }, [totalGuestsCount, bookingDetails, guestData.length, isAuthenticated]);
 
 
-    // Handle changes in guest forms (Stabilized with useCallback and functional update)
     const handleGuestChange = useCallback((index: number, data: Partial<GuestPayload>) => {
         setGuestData(prevGuestData => {
             const newGuestData = [...prevGuestData];
-            // Merge the partial update into the specific guest object
             newGuestData[index] = { ...newGuestData[index], ...data }; 
             return newGuestData;
         });
     }, []);
     
-    // Handle changes in extra requests
     const handleExtraRequestChange = (index: number, value: string) => {
         const newExtraRequests = [...roomExtraRequests];
         newExtraRequests[index] = value;
         setRoomExtraRequests(newExtraRequests);
     };
 
-    // Validation logic for guests
+    const handleExtraGuestChange = (roomIndex: number, field: 'adults' | 'children', value: number) => {
+        if (!bookingDetails) return;
+        
+        setBookingDetails(prevDetails => {
+            if (!prevDetails) return null;
+            const newRooms = [...prevDetails.rooms];
+            
+            const maxCapacityPerRoom = field === 'adults' 
+                ? newRooms[roomIndex].max_extra_adults 
+                : newRooms[roomIndex].max_children;
+            const maxTotalCapacity = maxCapacityPerRoom * newRooms[roomIndex].quantity;
+                
+            const newCount = Math.min(Math.max(0, value), maxTotalCapacity);
+            
+            newRooms[roomIndex] = {
+                ...newRooms[roomIndex],
+                [field]: newCount,
+            };
+            
+            return {
+                ...prevDetails,
+                rooms: newRooms,
+            };
+        });
+    };
+
+    // Validation logic for guests (Simplified: only check principal guest on FE)
     const validateGuests = () => {
         if (!rulesAccepted) {
             setError("پذیرش قوانین و شرایط رزرو الزامی است.");
             return false;
         }
-
+        
         // 1. Check Principal Guest (Index 0) - Mandatory fields (Name, Last Name, Phone, ID/Passport)
         const principalGuest = guestData[0];
         if (!principalGuest?.first_name || !principalGuest?.last_name || !principalGuest?.phone_number) {
@@ -224,23 +241,13 @@ const CheckoutPage: React.FC = () => {
                 return false;
             }
         } else {
-            // Check for National ID for domestic principal guest
             if (!principalGuest.national_id) {
                 setError("کد ملی رزرو کننده (نفر اول) الزامی است.");
                 return false;
             }
         }
 
-        // 2. Check Secondary Guests (Index 1 onwards) - Only name/last name are mandatory 
-        for (let i = 1; i < totalGuestsCount; i++) {
-            const secondaryGuest = guestData[i];
-            if (!secondaryGuest?.first_name || !secondaryGuest?.last_name) {
-                 setError(`لطفاً نام و نام خانوادگی میهمان شماره ${toPersianDigits(i + 1)} را تکمیل کنید.`);
-                 // Automatically expand the secondary guest section if validation fails there
-                 setShowSecondaryGuests(true); 
-                 return false;
-            }
-        }
+        // 2. Check Secondary Guests (Index 1 onwards) - REMOVED MANDATORY CHECK ENTIRELY ON FE
         
         setError(''); // Clear previous guest errors
         return true;
@@ -263,7 +270,7 @@ const CheckoutPage: React.FC = () => {
         setLoading(true);
 
         try {
-            // 1. Prepare Payload for Final Price Check (for MultiPriceData API)
+            // 1. Price Check (Kept to ensure final price is correct before creating the PENDING booking)
             const priceCheckPayload: MultiPriceData = {
                 check_in: bookingDetails.check_in,
                 check_out: bookingDetails.check_out,
@@ -274,11 +281,9 @@ const CheckoutPage: React.FC = () => {
                     extra_adults: r.adults, 
                     children_count: r.children, 
                 })),
-                // IMPORTANT: Pass user.id or null to correctly calculate agency/authenticated pricing
                 user_id: user?.id || null
             };
             
-            // 2. Run Price Check (re-confirming price before booking)
             const { total_price: confirmedPrice } = await calculateMultiPrice(priceCheckPayload);
 
             if (confirmedPrice !== finalPrice) {
@@ -288,14 +293,11 @@ const CheckoutPage: React.FC = () => {
                 return;
             }
             
-            // 3. Prepare Payload for Booking Submission (for CreateBooking API)
-            // Ensure wants_to_register is explicitly set for the principal guest if present
+            // 2. Prepare Payload for Booking Submission
             const finalGuests: GuestPayload[] = guestData.map((guest, index) => {
-                // Only for the principal guest, include wants_to_register if unauthenticated
                 if (index === 0 && isUnauthenticated) {
                     return { ...guest, wants_to_register: guest.wants_to_register || false } as GuestPayload;
                 }
-                // For other guests or authenticated users, ensure wants_to_register is omitted or false
                 const { wants_to_register, ...rest } = guest;
                 return rest as GuestPayload;
             })
@@ -303,35 +305,25 @@ const CheckoutPage: React.FC = () => {
             const bookingPayload: BookingPayload = {
                 check_in: bookingDetails.check_in,
                 check_out: bookingDetails.check_out,
-                // Map the room details along with extra requests
                 booking_rooms: bookingDetails.rooms.map((r, index) => ({
                     room_type_id: r.room_type_id,
                     board_type_id: r.board_type_id,
                     quantity: r.quantity,
                     adults: r.adults, // maps to extra adults
                     children: r.children, 
-                    extra_requests: roomExtraRequests[index], // Added extra_requests
+                    extra_requests: roomExtraRequests[index], 
                 })),
                 guests: finalGuests,
-                payment_method: paymentMethod,
+                // REMOVED payment_method: paymentMethod,
                 rules_accepted: rulesAccepted, 
-                // Rely on request header for token/user ID. The backend will use request.user if available.
-                agency_id: null, // Omit agency_id here unless booking on behalf of an agency
+                agency_id: null, 
             };
 
-            // 4. Submit Booking
+            // 3. Submit Booking (Creates PENDING booking and returns code)
             const bookingResponse = await createBooking(bookingPayload);
             
-            // 5. Handle Payment Redirection or Success
-            if (paymentMethod === 'online' && bookingResponse.booking_code) {
-                const paymentResponse = await initiatePayment(bookingResponse.booking_code);
-                window.location.href = paymentResponse.redirect_url;
-            } else if (paymentMethod === 'card_to_card' && bookingResponse.booking_code) {
-                 // For card_to_card, redirect to a specific page that shows payment details
-                 router.push(`/booking-success-transfer?code=${bookingResponse.booking_code}`);
-            } else {
-                router.push(`/booking-success?code=${bookingResponse.booking_code}`);
-            }
+            // 4. Redirect to the dedicated payment page
+            router.push(`/payment/${bookingResponse.booking_code}`);
 
         } catch (err: unknown) {
             const axiosError = err as { response?: { data?: { error?: string | { guests?: string[] } } }, message?: string };
@@ -346,7 +338,6 @@ const CheckoutPage: React.FC = () => {
     };
     
     const CheckoutSummary = () => (
-        // ... (omitted for brevity)
         <div className="bg-blue-50 p-6 rounded-lg border border-blue-200" dir="rtl">
             <h3 className="text-xl font-bold mb-4 text-blue-800">خلاصه رزرو</h3>
             {bookingDetails ? (
@@ -356,14 +347,45 @@ const CheckoutPage: React.FC = () => {
                     
                     <ul className="space-y-3 border-t pt-3 mb-4">
                         {bookingDetails.rooms.map((room, index) => (
-                            <li key={index} className="text-sm border-b pb-2">
+                            <li key={index} className="text-sm border-b pb-4">
                                 <p className="font-semibold text-gray-800">{room.room_name}</p>
                                 <p className="text-gray-600">
                                     تعداد: {toPersianDigits(room.quantity)} اتاق / سرویس: {room.board_name}
                                 </p>
                                 <p className="font-medium text-gray-700">
-                                    قیمت کل: {toPersianDigits(room.price_per_room_total.toLocaleString('fa'))} تومان
+                                    قیمت کل پایه: {toPersianDigits(room.price_per_room_total.toLocaleString('fa'))} تومان
                                 </p>
+                                
+                                {/* Extra Guest and Children Inputs */}
+                                <div className="mt-2 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Input
+                                            label={`نفر اضافه (${toPersianDigits(room.max_extra_adults)} حداکثر در هر اتاق):`}
+                                            id={`extra_adults_${index}`}
+                                            type="number"
+                                            min={0}
+                                            max={room.max_extra_adults * room.quantity}
+                                            value={room.adults}
+                                            onChange={(e) => handleExtraGuestChange(index, 'adults', parseInt(e.target.value))}
+                                            className="text-center"
+                                            disabled={room.max_extra_adults <= 0} 
+                                        />
+                                    </div>
+                                    <div>
+                                        <Input
+                                            label={`کودک (${toPersianDigits(room.max_children)} حداکثر در هر اتاق):`}
+                                            id={`children_${index}`}
+                                            type="number"
+                                            min={0}
+                                            max={room.max_children * room.quantity}
+                                            value={room.children}
+                                            onChange={(e) => handleExtraGuestChange(index, 'children', parseInt(e.target.value))}
+                                            className="text-center"
+                                            disabled={room.max_children <= 0} 
+                                        />
+                                    </div>
+                                </div>
+                                
                                 {/* Input for extra requests per room block */}
                                 <div className="mt-2">
                                     <Input
@@ -390,135 +412,127 @@ const CheckoutPage: React.FC = () => {
     );
 
     if (!bookingDetails && !error) {
-        return <div className="container mx-auto p-8" dir="rtl">در حال بارگذاری اطلاعات رزرو...</div>;
+        return (
+            <>
+                <Header />
+                <div className="container mx-auto p-8" dir="rtl">در حال بارگذاری اطلاعات رزرو...</div>
+                <Footer />
+            </>
+        );
     }
     
-    // If error is set due to missing cart data
     if (error && !bookingDetails) {
-        return <div className="container mx-auto p-8" dir="rtl">
-            <h1 className="text-4xl font-extrabold mb-8 text-red-600">خطا در فرآیند رزرو</h1>
-            <p className="text-lg text-gray-700">{error}</p>
-            <Button onClick={() => router.push('/')} className='mt-6'>بازگشت به صفحه اصلی</Button>
-        </div>
+        return (
+            <>
+                <Header />
+                <div className="container mx-auto p-8" dir="rtl">
+                    <h1 className="text-4xl font-extrabold mb-8 text-red-600">خطا در فرآیند رزرو</h1>
+                    <p className="text-lg text-gray-700">{error}</p>
+                    <Button onClick={() => router.push('/')} className='mt-6'>بازگشت به صفحه اصلی</Button>
+                </div>
+                <Footer />
+            </>
+        );
     }
     
-    // Filter payment methods based on user status
-    const availablePaymentMethods: Array<{ value: PaymentMethod, label: string }> = [
-        { value: 'online', label: 'پرداخت آنلاین (درگاه بانکی)' },
-        { value: 'card_to_card', label: 'کارت به کارت (وقت واریز ۲۴ ساعت)' },
-        // Only show credit payment for authenticated agency users
-        ...(isAgencyUser ? [{ value: 'credit' as PaymentMethod, label: 'پرداخت اعتباری (مخصوص آژانس)' }] : []),
-    ];
-
+    // Removed availablePaymentMethods and related logic
 
     return (
-        <div className="container mx-auto p-8" dir="rtl">
-            <h1 className="text-4xl font-extrabold mb-8 text-gray-900">نهایی‌سازی رزرو</h1>
+        <>
+            <Header />
+            <div className="container mx-auto p-8" dir="rtl">
+                <h1 className="text-4xl font-extrabold mb-8 text-gray-900">نهایی‌سازی رزرو</h1>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="md:col-span-2 order-2 md:order-1">
-                    
-                    {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">{error}</div>}
-
-                    <form onSubmit={handleSubmit}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="md:col-span-2 order-2 md:order-1">
                         
-                        {/* Principal Guest Form - RENDERED DIRECTLY for stable focus and key */}
-                        <div className="border p-4 mb-6 rounded-lg bg-yellow-50 border-yellow-200">
-                            <h3 className="text-xl font-bold mb-4 text-yellow-800">اطلاعات رزرو کننده (سرپرست) - الزامی</h3>
-                            <GuestInputForm
-                                key={0} // Explicit stable key for the primary guest
-                                index={0}
-                                onChange={handleGuestChange}
-                                isPrincipal={true}
-                                value={guestData[0] || {} as Partial<GuestPayload>}
-                                containerClass="bg-yellow-50" // Passed explicit background class
-                                isUnauthenticated={isUnauthenticated} // NEW: Pass unauthenticated status
-                            />
-                        </div>
+                        {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">{error}</div>}
 
-                        {/* Secondary Guests - Collapsible Section */}
-                        {totalGuestsCount > 1 && (
-                            <div className="mt-8">
-                                <Button 
-                                    type="button" 
-                                    onClick={() => setShowSecondaryGuests(prev => !prev)}
-                                    className="w-full bg-gray-100 text-gray-800 hover:bg-gray-200 border-gray-300 border justify-between"
-                                >
-                                    <span>اطلاعات سایر میهمانان ({toPersianDigits(totalGuestsCount - 1)} نفر) - اختیاری</span>
-                                    <span className="text-xl">{showSecondaryGuests ? '▲' : '▼'}</span>
-                                </Button>
-
-                                {showSecondaryGuests && (
-                                    <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-blue-50"> 
-                                        {/* Rendering secondary guests starting from index 1 */}
-                                        {Array.from({ length: totalGuestsCount - 1 }).map((_, listIndex) => {
-                                            const guestIndex = listIndex + 1;
-                                            const guest = guestData[guestIndex] || {} as Partial<GuestPayload>;
-
-                                            return (
-                                                <GuestInputForm
-                                                  key={guestIndex} // Use the actual guest index as key
-                                                  index={guestIndex} 
-                                                  onChange={handleGuestChange}
-                                                  isPrincipal={false}
-                                                  value={guest} // <-- Using 'value' prop for controlled component
-                                                  containerClass="bg-blue-50" 
-                                                  isUnauthenticated={isUnauthenticated} // Pass this for consistency
-                                                />
-                                            )
-                                        })}
-                                    </div>
-                                )}
+                        <form onSubmit={handleSubmit}>
+                            
+                            {/* Principal Guest Form */}
+                            <div className="border p-4 mb-6 rounded-lg bg-yellow-50 border-yellow-200">
+                                <h3 className="text-xl font-bold mb-4 text-yellow-800">اطلاعات رزرو کننده (سرپرست) - الزامی</h3>
+                                <GuestInputForm
+                                    key={0} 
+                                    index={0}
+                                    onChange={handleGuestChange}
+                                    isPrincipal={true}
+                                    value={guestData[0] || {} as Partial<GuestPayload>}
+                                    containerClass="bg-yellow-50" 
+                                    isUnauthenticated={isUnauthenticated} 
+                                />
                             </div>
-                        )}
-                        
-                        <div className="mt-8 pt-6 border-t">
-                            <h2 className="text-2xl font-bold mb-4">تأیید نهایی و پرداخت</h2>
+
+                            {/* Secondary Guests - Collapsible Section */}
+                            {totalGuestsCount > 1 && (
+                                <div className="mt-8">
+                                    <Button 
+                                        type="button" 
+                                        onClick={() => setShowSecondaryGuests(prev => !prev)}
+                                        className="w-full bg-gray-100 text-gray-800 hover:bg-gray-200 border-gray-300 border justify-between"
+                                    >
+                                        <span>اطلاعات سایر میهمانان ({toPersianDigits(totalGuestsCount - 1)} نفر) - اختیاری</span>
+                                        <span className="text-xl">{showSecondaryGuests ? '▲' : '▼'}</span>
+                                    </Button>
+
+                                    {showSecondaryGuests && (
+                                        <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-blue-50"> 
+                                            {Array.from({ length: totalGuestsCount - 1 }).map((_, listIndex) => {
+                                                const guestIndex = listIndex + 1;
+                                                const guest = guestData[guestIndex] || {} as Partial<GuestPayload>;
+
+                                                return (
+                                                    <GuestInputForm
+                                                      key={guestIndex} 
+                                                      index={guestIndex} 
+                                                      onChange={handleGuestChange}
+                                                      isPrincipal={false}
+                                                      value={guest} 
+                                                      containerClass="bg-blue-50" 
+                                                      isUnauthenticated={isUnauthenticated} 
+                                                    />
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             
-                            {/* Rules Acceptance Checkbox */}
-                            <label className="flex items-center mb-6 cursor-pointer">
-                                <input 
-                                    type="checkbox" 
-                                    checked={rulesAccepted} 
-                                    onChange={(e) => setRulesAccepted(e.target.checked)} 
-                                    className="ml-3 w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                                    required // HTML required attribute for initial quick check
-                                />
-                                <span className="text-sm text-gray-700">
-                                    قوانین و شرایط رزرو را مطالعه کرده و می‌پذیرم.
-                                    <span className="text-red-500 mr-1">توجه:</span> در صورت مغایرت اطلاعات وارد شده با قوانین هتل، وب‌سایت در قبال عدم پذیرش هتل پاسخگو نخواهد بود.
-                                </span>
-                            </label>
-                            
-                            <Button type="submit" disabled={loading || !bookingDetails || !rulesAccepted}>
-                                {loading ? 'در حال ثبت و پرداخت...' : `تأیید و ${paymentMethod === 'online' ? 'پرداخت' : paymentMethod === 'card_to_card' ? 'ثبت (پرداخت دستی)' : 'ثبت اعتباری'}`}
-                            </Button>
-                        </div>
-                    </form>
-                </div>
-                
-                <div className="md:col-span-1 order-1 md:order-2">
-                    <CheckoutSummary />
+                            <div className="mt-8 pt-6 border-t">
+                                <h2 className="text-2xl font-bold mb-4">تأیید نهایی و ثبت رزرو</h2>
+                                
+                                {/* Rules Acceptance Checkbox */}
+                                <label className="flex items-center mb-6 cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={rulesAccepted} 
+                                        onChange={(e) => setRulesAccepted(e.target.checked)} 
+                                        className="ml-3 w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                        required
+                                    />
+                                    <span className="text-sm text-gray-700">
+                                        قوانین و شرایط رزرو را مطالعه کرده و می‌پذیرم.
+                                        <span className="text-red-500 mr-1">توجه:</span> در صورت مغایرت اطلاعات وارد شده با قوانین هتل، وب‌سایت در قبال عدم پذیرش هتل پاسخگو نخواهد بود.
+                                    </span>
+                                </label>
+                                
+                                <Button type="submit" disabled={loading || !bookingDetails || !rulesAccepted}>
+                                    {loading ? 'در حال ثبت اطلاعات...' : `ثبت نهایی و هدایت به صفحه پرداخت`}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
                     
-                    <div className="mt-6 p-4 bg-white rounded-lg shadow">
-                        <h4 className="font-semibold mb-3">روش پرداخت</h4>
-                        {availablePaymentMethods.map(method => (
-                            <label key={method.value} className="block mb-2 cursor-pointer">
-                                <input 
-                                    type="radio" 
-                                    name="payment" 
-                                    value={method.value} 
-                                    checked={paymentMethod === method.value} 
-                                    onChange={() => setPaymentMethod(method.value as PaymentMethod)} 
-                                    className="ml-2"
-                                />
-                                {method.label}
-                            </label>
-                        ))}
+                    <div className="md:col-span-1 order-1 md:order-2">
+                        <CheckoutSummary />
+                        
+                        {/* REMOVED PAYMENT METHOD SELECTION */}
                     </div>
                 </div>
             </div>
-        </div>
+            <Footer />
+        </>
     );
 };
 

@@ -1,6 +1,7 @@
 // src/components/GuestInputForm.tsx
-// version: 2.1.8
-// Feature: Added 'wants_to_register' field option for principal guest during guest booking.
+// version: 2.1.9
+// FIX: Made name/last name fields conditional on 'isPrincipal' for the 'required' HTML attribute.
+// This prevents browser validation from blocking submission for secondary guests with empty name fields.
 
 import React, { memo } from 'react'; 
 import { Input } from './ui/Input'; 
@@ -60,6 +61,8 @@ const GuestInputForm = ({ index, onChange, isPrincipal, value, containerClass, i
     const isNationalIdRequired = isPrincipal && !isForeign;
     const isPassportRequired = isPrincipal && isForeign;
     const isNationalityRequired = isPrincipal && isForeign;
+    // NEW: Name/Last Name are required only for the principal guest
+    const isNameRequired = isPrincipal; 
 
     const guestTitle = isPrincipal ? `اطلاعات میهمان ${index + 1} (سرپرست)` : `اطلاعات میهمان ${index + 1}`;
     
@@ -73,9 +76,21 @@ const GuestInputForm = ({ index, onChange, isPrincipal, value, containerClass, i
             <h4 className="text-lg font-bold mb-4 text-primary-brand">{guestTitle}</h4>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Name fields - Always required (at least in UI for minimal validation) */}
-                <Input label="نام" name="first_name" required onChange={handleChange} value={guestData.first_name || ''}/>
-                <Input label="نام خانوادگی" name="last_name" required onChange={handleChange} value={guestData.last_name || ''}/>
+                {/* Name fields - REQUIRED ONLY IF isPrincipal is TRUE */}
+                <Input 
+                    label="نام" 
+                    name="first_name" 
+                    required={isNameRequired} // CHANGED
+                    onChange={handleChange} 
+                    value={guestData.first_name || ''}
+                />
+                <Input 
+                    label="نام خانوادگی" 
+                    name="last_name" 
+                    required={isNameRequired} // CHANGED
+                    onChange={handleChange} 
+                    value={guestData.last_name || ''}
+                />
                 
                 {/* Phone Number - Required only for the principal guest */}
                 <Input 
