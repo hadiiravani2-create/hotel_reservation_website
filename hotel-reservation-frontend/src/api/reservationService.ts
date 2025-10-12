@@ -1,39 +1,35 @@
 // src/api/reservationService.ts
-// version: 1.2.1
-// Feature: Added BookingDetail interfaces and fetchBookingDetails API call to support the two-step payment flow.
+// version: 1.2.3
+// Feature: Added BookingListItem interface and fetchMyBookings API function to support the User Dashboard.
+
 import api from './coreService'; // نمونه Axios پیکربندی شده
+import moment from 'moment-jalaali'; // Added for date formatting if needed later
 
-// --- Interfaces for Booking Submission Payload ---
-
-// Define GuestPayload interface (based on GuestInputForm.tsx)
+// --- Interfaces for Booking Submission Payload (Kept) ---
 export interface GuestPayload {
   first_name: string;
   last_name: string;
   is_foreign: boolean;
-  national_id: string | null; // Allow null to match BE model fix
-  passport_number: string | null; // Allow null to match BE model fix
-  phone_number: string | null; // Allow null to match BE model fix
-  nationality: string | null; // Allow null to match BE model fix
-  // New fields
+  national_id: string | null;
+  passport_number: string | null;
+  phone_number: string | null;
+  nationality: string | null;
   city_of_origin?: string | null; 
-  wants_to_register?: boolean; // NEW: Added for optional registration support (maps to serializer field)
+  wants_to_register?: boolean; 
 }
 
-// Endpoint: /reservations/bookings/
-// This Payload is critical and maps directly to CreateBookingSerializer
 export interface BookingPayload { 
   booking_rooms: Array<{
     room_type_id: number;
     quantity: number;
-    adults: number;   // extra persons
-    children: number; // children count
-    board_type_id: number; // Selected board type from Checkout step
+    adults: number;   
+    children: number; 
+    board_type_id: number; 
     extra_requests?: string | null; 
   }>;
   check_in: string;
   check_out: string;
-  guests: Array<GuestPayload>; // Explicitly using GuestPayload
-  // REMOVED: payment_method is now selected on the separate payment page
+  guests: Array<GuestPayload>; 
   rules_accepted: boolean;
   agency_id?: number | null;
 }
@@ -41,11 +37,9 @@ export interface BookingPayload {
 interface BookingResponse {
   booking_code: string;
   total_price: number;
-  // NOTE: The backend view returns these two fields upon successful creation
 }
 
-// --- Interfaces for Booking Detail Retrieval (Backend BookingDetailSerializer) ---
-
+// --- Interfaces for Booking Detail Retrieval (Kept) ---
 export interface GuestDetail {
     first_name: string;
     last_name: string;
@@ -60,10 +54,10 @@ export interface GuestDetail {
 export interface BookingRoomDetail {
     id: number; 
     room_type_name: string;
-    board_type: string; // Name of board type (e.g., 'BB', 'FB')
+    board_type: string; 
     hotel_name: string;
     quantity: number;
-    adults: number; // Extra adults
+    adults: number; 
     children: number;
     extra_requests: string | null;
 }
@@ -73,8 +67,8 @@ export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'cancellatio
 export interface BookingDetail {
     booking_code: string;
     hotel_name: string;
-    check_in: string; // jDate
-    check_out: string; // jDate
+    check_in: string; 
+    check_out: string; 
     total_price: number;
     status: BookingStatus;
     created_at: string;
@@ -82,32 +76,82 @@ export interface BookingDetail {
     total_guests: number;
     booking_rooms: BookingRoomDetail[];
     guests: GuestDetail[];
-    // NOTE: If payment_method is needed, it must be added to the Booking Model and Serializer
-    // payment_method: 'online' | 'credit' | 'in_person' | 'card_to_card'; 
 }
 
+// --- NEW Interfaces for Booking List (BookingListSerializer) ---
+
+export interface BookingListItem {
+    booking_code: string;
+    hotel_name: string;
+    room_summary: string; // e.g., "1 x Double Room"
+    check_in: string; // jDate
+    check_out: string; // jDate
+    total_price: number;
+    status: BookingStatus;
+}
+
+// --- NEW Interfaces for Offline Payment (Kept) ---
+
+export interface OfflineBank {
+    id: number;
+    bank_name: string;
+    account_holder: string;
+    account_number: string;
+    card_number: string;
+}
+
+export interface PaymentConfirmationPayload {
+    booking_code: string; 
+    offline_bank: number; 
+    tracking_code: string; 
+    payment_date: string; 
+    payment_amount: number; 
+}
+
+interface PaymentConfirmationResponse {
+    success: boolean;
+    message: string;
+    confirmation_id: number;
+}
 
 // --- API Service Functions ---
 
 // Endpoint: /reservations/bookings/ (1. Create Booking)
 export const createBooking = async (data: BookingPayload): Promise<BookingResponse> => {
-  // Authentication is optional for this endpoint (Guest Booking support)
-  // Removed payment_method from data before sending, as it's now optional from payload
   const response = await api.post('/reservations/bookings/', data);
   return response.data;
 };
 
-// NEW Endpoint: /reservations/bookings/<booking_code>/details/ (2. Fetch Details)
+// Endpoint: /reservations/bookings/<booking_code>/details/ (2. Fetch Details)
 export const fetchBookingDetails = async (booking_code: string): Promise<BookingDetail> => {
   const response = await api.get(`/reservations/bookings/${booking_code}/details/`);
   return response.data;
+};
+
+// NEW Endpoint: /reservations/my-bookings/
+export const fetchMyBookings = async (): Promise<BookingListItem[]> => {
+    // This endpoint requires authentication (AuthContext provides the token)
+    const response = await api.get('/reservations/my-bookings/');
+    return response.data;
 };
 
 
 // Endpoint: /reservations/initiate-payment/ (3. Initiate Payment)
 export const initiatePayment = async (booking_code: string): Promise<{ redirect_url: string }> => {
   const response = await api.post('/reservations/initiate-payment/', { booking_code });
-  return response.data; // Expects to include redirect_url
+  return response.data; 
+};
+
+// Endpoint: /reservations/offline-banks/
+export const fetchOfflineBanks = async (): Promise<OfflineBank[]> => {
+    const response = await api.get('/reservations/offline-banks/');
+    return response.data;
+};
+
+// Endpoint: /reservations/payment-confirm/
+export const submitPaymentConfirmation = async (data: PaymentConfirmationPayload): Promise<PaymentConfirmationResponse> => {
+    const response = await api.post('/reservations/payment-confirm/', data);
+    return response.data;
 };
 
 // Endpoint: /reservations/booking-request/
