@@ -1,16 +1,33 @@
 // src/components/ui/Button.tsx
+// version: 0.0.1
+// Feature: Added 'size' prop to support smaller buttons.
+
 import React from 'react';
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'link' | 'outline';
+type ButtonSize = 'default' | 'sm'; // NEW: Added size type
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   loading?: boolean;
   children: React.ReactNode;
+  size?: ButtonSize; // NEW: Added size prop
 }
 
+const getSizeClasses = (size: ButtonSize) => {
+    switch (size) {
+        case 'sm':
+            return "py-1.5 px-3 text-sm"; // Smaller padding and font
+        case 'default':
+        default:
+            return "py-2 px-4 text-base"; // Base size (was text-sm previously, upgraded to base for better default)
+    }
+}
+
+
 const getBaseStyles = (variant: ButtonVariant) => {
-  let baseClasses = "w-full py-2 px-4 rounded-lg shadow-md text-sm font-semibold transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 transform hover:-translate-y-0.5 active:translate-y-0";
+  let baseClasses = "w-full rounded-lg shadow-md font-semibold transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 transform hover:-translate-y-0.5 active:translate-y-0";
+  // The size classes will be prepended in the main component
 
   switch (variant) {
     case 'primary':
@@ -41,10 +58,12 @@ export const Button: React.FC<ButtonProps> = ({
   loading = false, 
   children, 
   disabled, 
+  size = 'default', // NEW: Added size to destructured props
   className = '',
   ...props 
 }) => {
-  const finalClassName = `${getBaseStyles(variant)} ${
+  // NEW: Combined base styles, size classes, and custom classes
+  const finalClassName = `${getBaseStyles(variant)} ${getSizeClasses(size)} ${
     (disabled || loading) ? 'opacity-50 cursor-not-allowed' : ''
   } ${className}`;
 

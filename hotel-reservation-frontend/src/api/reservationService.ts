@@ -90,6 +90,12 @@ export interface BookingListItem {
     status: BookingStatus;
 }
 
+export interface GuestLookupPayload {
+    booking_code: string;
+    national_id: string; // Used for Iranian guests
+    passport_number: string; // Used for foreign guests
+}
+
 // --- NEW Interfaces for Offline Payment (Kept) ---
 
 export interface OfflineBank {
@@ -128,13 +134,19 @@ export const fetchBookingDetails = async (booking_code: string): Promise<Booking
   return response.data;
 };
 
+// NEW Endpoint: /reservations/guest-lookup/
+export const guestBookingLookup = async (data: GuestLookupPayload): Promise<BookingDetail> => {
+    const response = await api.post('/reservations/guest-lookup/', data);
+    return response.data;
+};
+
+
 // NEW Endpoint: /reservations/my-bookings/
 export const fetchMyBookings = async (): Promise<BookingListItem[]> => {
     // This endpoint requires authentication (AuthContext provides the token)
     const response = await api.get('/reservations/my-bookings/');
     return response.data;
 };
-
 
 // Endpoint: /reservations/initiate-payment/ (3. Initiate Payment)
 export const initiatePayment = async (booking_code: string): Promise<{ redirect_url: string }> => {
