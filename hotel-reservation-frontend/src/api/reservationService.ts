@@ -1,6 +1,7 @@
 // src/api/reservationService.ts
-// version: 1.2.3
+// version: 1.2.4
 // Feature: Added BookingListItem interface and fetchMyBookings API function to support the User Dashboard.
+// FIX: Updated GuestLookupPayload to allow null for national_id/passport_number to match usage in track-booking.tsx.
 
 import api from './coreService'; // نمونه Axios پیکربندی شده
 import moment from 'moment-jalaali'; // Added for date formatting if needed later
@@ -92,8 +93,8 @@ export interface BookingListItem {
 
 export interface GuestLookupPayload {
     booking_code: string;
-    national_id: string; // Used for Iranian guests
-    passport_number: string; // Used for foreign guests
+    national_id: string | null; // FIX: Must allow null
+    passport_number: string | null; // FIX: Must allow null
 }
 
 // --- NEW Interfaces for Offline Payment (Kept) ---
