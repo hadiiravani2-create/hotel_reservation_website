@@ -1,6 +1,6 @@
 // src/api/pricingService.ts
-// version: 1.2.3
-// FIX: Confirmed explicit export of searchHotels, SearchParams, and HotelSearchResult to resolve compilation error in search.tsx.
+// version: 1.2.4
+// FIX: Corrected API paths for hotel services to match the new standardized /api/hotels/ prefix.
 
 import api from './coreService';
 import { AvailableRoom } from '@/types/hotel'; 
@@ -81,16 +81,19 @@ export const getHotelDetails = async (
     if (duration) params.duration = duration;
     if (user_id) params.user_id = user_id; 
 
-    const response = await api.get<HotelDetails>(`/hotels/api/hotels/${slug}/`, { params });
+    // FIX: Removed redundant /hotels prefix. Correct path is /api/hotels/<slug>
+    const response = await api.get<HotelDetails>(`/api/hotels/${slug}/`, { params });
     return response.data;
 };
 
 export const getCities = async () => {
-    const response = await api.get('/hotels/api/cities/');
+    // FIX: Removed redundant /hotels prefix. Correct path is /api/hotels/cities/
+    const response = await api.get('/api/hotels/cities/');
     return response.data;
 }
 
 export const getAmenities = async () => {
-    const response = await api.get('/hotels/api/amenities/');
+    // FIX: Removed redundant /hotels prefix. Correct path is /api/hotels/amenities/
+    const response = await api.get('/api/hotels/amenities/');
     return response.data;
 }

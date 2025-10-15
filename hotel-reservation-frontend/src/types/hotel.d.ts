@@ -1,6 +1,19 @@
 // src/types/hotel.d.ts
-// version: 1.0.3
-// Feature: Added interfaces for GuestInfo and BookingRequestPayload to support guest booking without mandatory login.
+// version: 1.0.4
+// FEATURE: Added SuggestedHotel interface for homepage hotel cards.
+
+/**
+ * Represents a suggested hotel object returned by the API for the homepage.
+ * Based on hotels.serializers.SuggestedHotelSerializer
+ */
+export interface SuggestedHotel {
+  id: number;
+  name: string;
+  slug: string;
+  stars: number;
+  city_name: string;
+  main_image: string | null;
+}
 
 /**
  * Represents a single amenity for a hotel or room.

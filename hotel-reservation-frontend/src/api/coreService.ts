@@ -1,8 +1,9 @@
 // src/api/coreService.ts
-// version: 1.1.0
-// Final Version: Added baseURL and re-added getSiteSettings and getMenu functions to support all components.
+// version: 1.1.1
+// FEATURE: Added getSuggestedHotels function to fetch homepage data.
 
 import axios from 'axios';
+import { SuggestedHotel } from '@/types/hotel'; // Import the new type
 
 // The base URL is read from environment variables to support both SSR and CSR.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -56,6 +57,21 @@ export const getMenu = async (menuSlug: string): Promise<MenuItem[]> => {
 };
 
 // --- END: Re-added Interfaces and Functions ---
+
+/**
+ * Fetches a list of suggested hotels for the homepage.
+ * @returns {Promise<SuggestedHotel[]>} A promise that resolves to an array of suggested hotels.
+ */
+export const getSuggestedHotels = async (): Promise<SuggestedHotel[]> => {
+    try {
+        const response = await api.get('/api/hotels/suggested/');
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching suggested hotels:", error);
+        // In a real-world app, you might want to handle this error more gracefully
+        throw error;
+    }
+};
 
 
 export default api;
