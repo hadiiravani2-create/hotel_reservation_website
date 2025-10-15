@@ -1,9 +1,9 @@
 // src/api/coreService.ts
-// version: 1.1.1
-// FEATURE: Added getSuggestedHotels function to fetch homepage data.
+// version: 1.1.2
+// FEATURE: Added getUserWallet function to fetch user's wallet data.
 
 import axios from 'axios';
-import { SuggestedHotel } from '@/types/hotel'; // Import the new type
+import { SuggestedHotel, Wallet } from '@/types/hotel'; // Import Wallet type
 
 // The base URL is read from environment variables to support both SSR and CSR.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -68,7 +68,21 @@ export const getSuggestedHotels = async (): Promise<SuggestedHotel[]> => {
         return response.data;
     } catch (error) {
         console.error("Error fetching suggested hotels:", error);
-        // In a real-world app, you might want to handle this error more gracefully
+        throw error;
+    }
+};
+
+/**
+ * Fetches the authenticated user's wallet details, including balance and recent transactions.
+ * Requires authentication.
+ * @returns {Promise<Wallet>} A promise that resolves to the user's wallet data.
+ */
+export const getUserWallet = async (): Promise<Wallet> => {
+    try {
+        const response = await api.get('/api/wallet/');
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching user wallet:", error);
         throw error;
     }
 };

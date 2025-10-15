@@ -1,6 +1,27 @@
 // src/types/hotel.d.ts
-// version: 1.0.4
-// FEATURE: Added SuggestedHotel interface for homepage hotel cards.
+// version: 1.0.5
+// FEATURE: Added Wallet and WalletTransaction interfaces for the user profile.
+
+/**
+ * Represents a single wallet transaction record.
+ * Based on core.serializers.WalletTransactionSerializer
+ */
+export interface WalletTransaction {
+  id: number;
+  transaction_type: string; // The human-readable display name of the transaction type
+  amount: number;
+  description: string | null;
+  created_at: string; // ISO date string
+}
+
+/**
+ * Represents the user's wallet data returned from the API.
+ * Based on core.serializers.WalletSerializer
+ */
+export interface Wallet {
+  balance: number;
+  recent_transactions: WalletTransaction[];
+}
 
 /**
  * Represents a suggested hotel object returned by the API for the homepage.
