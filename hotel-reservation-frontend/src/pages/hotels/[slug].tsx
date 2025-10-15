@@ -1,10 +1,10 @@
 // src/pages/hotels/[slug].tsx
-// version: 3.0.2
-// FIX: Version bump to clear potential Turbopack parsing error related to incomplete code blocks/comments.
+// version: 3.0.3
+// REFACTOR: Removed moment-jalaali and the unnecessary toEnglishDigits utility function.
 
 import { GetServerSideProps } from 'next';
 import Image from 'next/image';
-import { useState, useMemo, useCallback } from 'react'; 
+import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { ParsedUrlQuery } from 'querystring';
 
@@ -16,21 +16,9 @@ import { AvailableRoom, CartItem } from '@/types/hotel';
 import BookingWidget from '@/components/BookingWidget';
 import RoomCard from '@/components/RoomCard';
 import { UserGroupIcon } from '@heroicons/react/24/outline';
-import moment from 'moment-jalaali';
-import { useAuth } from '@/hooks/useAuth'; 
+import { useAuth } from '@/hooks/useAuth';
 
-// --- Utility Functions ---
-const toEnglishDigits = (str: string | null | undefined): string => {
-    if (!str) return '';
-    const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
-    const arabicNumbers  = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
-    let newStr = str;
-    for (let i = 0; i < 10; i++) {
-        newStr = newStr.replace(persianNumbers[i], i.toString()).replace(arabicNumbers[i], i.toString());
-    }
-    return newStr;
-};
-
+// --- Utility Functions (toEnglishDigits removed) ---
 
 interface HotelPageProps {
   hotel: HotelDetails;
@@ -46,7 +34,7 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
   const { duration: durationFromQuery } = router.query;
   const duration = parseInt(durationFromQuery as string, 10) || 1;
   
-  const { user } = useAuth(); 
+  const { user } = useAuth();
   
   const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>(initialRooms);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -56,7 +44,6 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
     setAvailableRooms(rooms);
   }, []);
 
-  // BUG 2: Calculate total reserved quantity for each room type ID, regardless of board type
   const reservedRoomsMap = useMemo(() => {
     return cartItems.reduce((acc, item) => {
       const roomTypeId = item.room.id;
@@ -67,31 +54,24 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
 
   const handleAddToCart = useCallback((newItem: CartItem) => {
     setCartItems((prevItems) => {
-      // 1. Find the existing item (same room type AND same board type)
       const existingItemIndex = prevItems.findIndex((item) => item.id === newItem.id);
       
       const targetRoom = availableRooms.find(r => r.id === newItem.room.id);
       const roomMaxAvailable = targetRoom?.availability_quantity || 0;
       
-      // 2. Calculate the quantity that will be added/updated
-      let quantityChange = newItem.quantity;
       let newTotalReserved = reservedRoomsMap[newItem.room.id] || 0;
       
       if (existingItemIndex > -1) {
-        // If updating an existing item, remove its old quantity from the total before adding the new quantity
         newTotalReserved -= prevItems[existingItemIndex].quantity;
       }
       newTotalReserved += newItem.quantity;
       
-      // 3. BUG 2: Check if the new total reservation for this RoomType exceeds its availability
       if (newTotalReserved > roomMaxAvailable) {
           console.warn(`Cannot add/update. Total reserved rooms for ${newItem.room.name} exceeds availability of ${roomMaxAvailable}.`);
-          // Show alert to user (optional, but good practice)
           alert(`خطا: مجموع تعداد اتاق‌های انتخابی (شامل سرویس‌های مختلف) برای ${newItem.room.name} از موجودی کل (${roomMaxAvailable} اتاق) فراتر می‌رود.`);
-          return prevItems; // Do not update the state
+          return prevItems;
       }
 
-      // 4. Update the cart
       if (existingItemIndex > -1) {
         const updatedItems = [...prevItems];
         updatedItems[existingItemIndex] = newItem;
@@ -101,9 +81,8 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
       }
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [availableRooms, reservedRoomsMap]); // Dependency on reservedRoomsMap ensures capacity check logic is up-to-date
+  }, [availableRooms, reservedRoomsMap]);
 
-  // FIX 3: Remove from cart function
   const handleRemoveFromCart = useCallback((itemId: string) => {
     setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
   }, []);
@@ -143,7 +122,6 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
                                   room={room} 
                                   onAddToCart={handleAddToCart}
                                   duration={duration} 
-                                  // BUG 2: Pass reserved rooms count for this specific room type
                                   reservedCount={reservedRoomsMap[room.id] || 0}
                                 />
                             ))
@@ -166,7 +144,6 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
             setIsLoading={setIsLoading}
             cartItems={cartItems}
             onRemoveFromCart={handleRemoveFromCart}
-            // NEW: Pass the authenticated user's ID to the widget
             userId={user?.id || null} 
           />
         </aside>
@@ -180,8 +157,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     const { check_in, duration } = context.query;
 
     try {
-        const sanitizedCheckIn = toEnglishDigits(check_in as string);
-        const hotel = await getHotelDetails(slug, sanitizedCheckIn, duration as string);
+        // The check_in from query is already in the correct "YYYY-MM-DD" format.
+        const hotel = await getHotelDetails(slug, check_in as string, duration as string);
         const initialRooms = hotel.available_rooms || [];
         
         return { 

@@ -1,9 +1,10 @@
 // src/components/ui/JalaliDatePicker.tsx
-// Version 1
+// version: 1.0.1
+// REFACTOR: Centralized date configuration by importing from src/config/date.ts.
+
 import React from 'react';
 import DatePicker, { DateObject } from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
+import { DATE_CONFIG } from '@/config/date'; // Centralized import
 
 interface JalaliDatePickerProps {
   label: string;
@@ -17,6 +18,7 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({ label, name,
 
   const handleDateChange = (date: DateObject | null) => {
     if (date) {
+      // The format sent to the parent component is Gregorian for API compatibility.
       const formattedDateForApi = date.format("YYYY-MM-DD");
       onDateChange(name, formattedDateForApi);
     } else {
@@ -30,11 +32,10 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({ label, name,
       <DatePicker
         value={initialValue}
         onChange={handleDateChange}
-        calendar={persian}
-        locale={persian_fa}
+        calendar={DATE_CONFIG.calendar} // Using centralized config
+        locale={DATE_CONFIG.locale}     // Using centralized config
         calendarPosition="bottom-right"
         minDate={new DateObject()}
-        // FIX: Updated inputClass to match the new Input style
         inputClass="w-full h-12 p-4 bg-white border border-gray-300 rounded-md shadow-sm text-center 
                     focus:outline-none focus:ring-primary-brand focus:border-primary-brand 
                     hover:border-blue-500 transition-all"
