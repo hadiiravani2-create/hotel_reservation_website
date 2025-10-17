@@ -124,6 +124,7 @@ const SearchForm: React.FC = () => {
                             onDateChange={handleDateChange}
                             initialValue={formData.check_in}
                             required
+			    minDate={new DateObject()} // Use the flexible prop
                         />
                         {errors.check_in && <p className="text-red-500 text-xs mt-1">{errors.check_in}</p>}
                     </div>

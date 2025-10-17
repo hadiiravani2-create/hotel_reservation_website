@@ -87,5 +87,19 @@ export const getUserWallet = async (): Promise<Wallet> => {
     }
 };
 
+/**
+ * Initiates a deposit request and returns a transaction ID.
+ * @param amount The amount to deposit.
+ * @returns {Promise<{transaction_id: string}>}
+ */
+export const initiateWalletDeposit = async (amount: number): Promise<{ transaction_id: string }> => {
+    try {
+        const response = await api.post('/api/wallet/initiate-deposit/', { amount });
+        return response.data;
+    } catch (error) {
+        console.error("Error initiating wallet deposit:", error);
+        throw error;
+    }
+};
 
 export default api;

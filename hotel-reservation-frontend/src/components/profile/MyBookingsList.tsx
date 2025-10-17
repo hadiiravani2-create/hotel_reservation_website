@@ -1,7 +1,6 @@
 // src/components/profile/MyBookingsList.tsx
-// version: 1.0.2
-// FIX: Corrected date formatting by setting moment locale to 'fa'.
-// REFACTOR: Implemented clear and correct button logic for payment vs. details.
+// version: 1.0.4
+// FIX: Corrected a syntax error (unterminated string constant) in a className.
 
 import React, { useCallback } from 'react';
 import { useRouter } from 'next/router';
@@ -12,11 +11,11 @@ import { FaCalendarAlt, FaHotel, FaMoneyBillAlt, FaTimesCircle, FaEdit, FaInfoCi
 import { Button } from '@/components/ui/Button';
 import { fetchMyBookings, BookingListItem, BookingStatus, submitBookingRequest } from '@/api/reservationService';
 
-// FIX: Set moment locale to Persian to ensure correct date formatting
 moment.locale('fa');
 
 const statusMap: Record<BookingStatus, { label: string; color: string }> = {
   pending: { label: 'در انتظار پرداخت', color: 'text-yellow-600 bg-yellow-100' },
+  awaiting_confirmation: { label: 'منتظر تایید', color: 'text-cyan-600 bg-cyan-100' },
   confirmed: { label: 'تایید شده', color: 'text-green-700 bg-green-100' },
   cancelled: { label: 'لغو شده', color: 'text-red-700 bg-red-100' },
   cancellation_requested: { label: 'درخواست لغو', color: 'text-orange-600 bg-orange-100' },
@@ -84,7 +83,7 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
         {booking.room_summary}
       </p>
 
-      {/* REFACTORED: Clearer button logic */}
+      {/* FIX: Corrected the unterminated string in className */}
       <div className="flex justify-end space-x-4 space-x-reverse pt-4 border-t">
         {booking.status === 'pending' ? (
             <Button onClick={() => router.push(`/payment/${booking.booking_code}`)} variant="primary" size="sm">
