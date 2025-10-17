@@ -113,6 +113,12 @@ interface PaymentConfirmationResponse {
 
 // --- API Service Functions ---
 
+// API function to pay for a booking using the wallet
+export const payWithWallet = async (booking_code: string): Promise<{ success: boolean; message: string }> => {
+  const response = await api.post(`/reservations/bookings/${booking_code}/pay-with-wallet/`);
+  return response.data;
+};
+
 // ... (createBooking, fetchBookingDetails, guestBookingLookup, fetchMyBookings, initiatePayment functions remain unchanged)
 export const createBooking = async (data: BookingPayload): Promise<BookingResponse> => {
   const response = await api.post('/reservations/bookings/', data);
