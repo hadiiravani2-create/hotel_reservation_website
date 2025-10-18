@@ -1,11 +1,11 @@
 // src/components/ui/Button.tsx
-// version: 0.0.1
+// version: 0.0.2
 // Feature: Added 'size' prop to support smaller buttons.
 
 import React from 'react';
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'link' | 'outline';
-type ButtonSize = 'default' | 'sm'; // NEW: Added size type
+type ButtonSize = 'default' | 'sm' | 'icon'; // NEW: Added size type
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -18,7 +18,9 @@ const getSizeClasses = (size: ButtonSize) => {
     switch (size) {
         case 'sm':
             return "py-1.5 px-3 text-sm"; // Smaller padding and font
-        case 'default':
+        case 'icon':
+            return "h-10 w-10 p-2";
+	case 'default':
         default:
             return "py-2 px-4 text-base"; // Base size (was text-sm previously, upgraded to base for better default)
     }

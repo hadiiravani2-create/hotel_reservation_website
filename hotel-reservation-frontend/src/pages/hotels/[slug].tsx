@@ -186,6 +186,7 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
                                     onAddToCart={handleAddToCart}
                                     duration={duration} 
                                     reservedCount={reservedRoomsMap[room.id] || 0}
+				    hotelId={hotel.id}
                                   />
                               ))
                           ) : (

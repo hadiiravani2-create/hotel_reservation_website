@@ -8,7 +8,7 @@ import { HotelService } from '@/types/hotel';
  */
 export const fetchHotelServices = async (hotelId: number): Promise<HotelService[]> => {
   try {
-    const response = await api.get(`/services/hotel/${hotelId}/`);
+    const response = await api.get(`/api/services/hotel/${hotelId}/`);
     return response.data;
   } catch (error: any) {
     // If the API returns 404, it means the module is disabled or no services are defined.

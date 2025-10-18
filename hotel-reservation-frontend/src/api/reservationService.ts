@@ -4,8 +4,7 @@
 
 import api from './coreService';
 import moment from 'moment-jalaali';
-import { BookedServiceDetail } from '@/types/hotel';
-import { OfflineBank, SelectedServicePayload } from '@/types/hotel';
+import { BookedServiceDetail, BookingResponse, OfflineBank, SelectedServicePayload } from '@/types/hotel';
 // ... (GuestPayload, BookingPayload, BookingResponse interfaces remain unchanged)
 export interface GuestPayload {
   first_name: string;
@@ -36,10 +35,6 @@ export interface BookingPayload {
   selected_services?: SelectedServicePayload[];
 }
 
-interface BookingResponse {
-  booking_code: string;
-  total_price: number;
-}
 
 
 // ... (GuestDetail, BookingRoomDetail, BookingStatus, BookingDetail interfaces remain unchanged)

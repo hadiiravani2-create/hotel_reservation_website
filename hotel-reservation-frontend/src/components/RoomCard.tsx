@@ -14,6 +14,7 @@ interface RoomCardProps {
   duration: number;
   onAddToCart: (newItem: CartItem) => void;
   reservedCount: number;
+  hotelId: number;
 }
 
 const toPersianDigits = (str: string | number | undefined) => {
@@ -22,7 +23,7 @@ const toPersianDigits = (str: string | number | undefined) => {
     return String(str).replace(/[0-9]/g, (d) => persianDigits[parseInt(d)]);
 };
 
-const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reservedCount }) => {
+const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reservedCount, hotelId }) => {
   const [quantity, setQuantity] = useState<number>(1);
   const [selectedBoard, setSelectedBoard] = useState<PricedBoardType | null>(null);
 
@@ -50,15 +51,15 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reserv
         name: room.name,
         image: room.images.length > 0 ? room.images[0] : null,
         base_capacity: room.base_capacity,
-        hotel_id: (room as any).hotel_id,
+	extra_capacity: room.extra_capacity,
+	child_capacity: room.child_capacity,
+	hotel_id: hotelId,
       },
       selected_board: {
         id: selectedBoard.board_type.id,
         name: selectedBoard.board_type.name,
       },
       quantity: quantity,
-      adults: room.base_capacity, // Default adults to base capacity
-      children: 0, // Default children to 0
       price_per_room: selectedBoard.total_price,
       total_price: selectedBoard.total_price * quantity,
     };

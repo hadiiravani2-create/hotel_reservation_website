@@ -137,6 +137,8 @@ export interface CartItem {
     name: string;
     image: RoomImage | null;
     base_capacity: number; // Added for price calculation
+    extra_capacity: number;
+    child_capacity: number;
     hotel_id?: number; // Added to easily get hotel id
   };
   selected_board: {
@@ -146,8 +148,6 @@ export interface CartItem {
   quantity: number;
   price_per_room: number;
   total_price: number;
-  adults: number; // Added to store number of adults
-  children: number; // Added to store number of children
 }
 
 /**
@@ -213,4 +213,9 @@ export interface BookedServiceDetail {
   quantity: number;
   total_price: number;
   details?: Record<string, any>;
+}
+
+export interface BookingResponse {
+  booking_code: string;
+  payment_type: 'offline' | 'online';
 }
