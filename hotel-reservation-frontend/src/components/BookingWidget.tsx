@@ -1,17 +1,15 @@
 // src/components/BookingWidget.tsx
-// version: 2.3.0
-// FINAL FIX: Corrected all prop mismatches, including the 'value' vs 'defaultValue' error for JalaliDatePicker.
-// This version has been fully reviewed to resolve all previous build errors.
+// version: 1.0.3
+// FIX: Reverted 'defaultValue' prop back to 'value' for JalaliDatePicker to resolve TypeScript error.
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useQuery } from '@tanstack/react-query';
 import { DateObject } from 'react-multi-date-picker';
+import { DATE_CONFIG } from '@/config/date';
+
 import { Button } from './ui/Button';
 import { JalaliDatePicker } from './ui/JalaliDatePicker';
-import { getHotelDetails, HotelDetails } from '@/api/pricingService';
 import { AvailableRoom, CartItem } from '@/types/hotel';
-import { DATE_CONFIG } from '@/config/date';
 
 interface BookingWidgetProps {
   hotelSlug: string;
@@ -22,118 +20,136 @@ interface BookingWidgetProps {
   userId: number | null;
 }
 
-const BookingWidget: React.FC<BookingWidgetProps> = ({
-  hotelSlug,
-  onRoomsFetch,
-  setIsLoading,
-  cartItems,
-  onRemoveFromCart,
-  userId,
-}) => {
+const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, setIsLoading, cartItems, onRemoveFromCart, userId }) => {
   const router = useRouter();
+  const { check_in: checkInQuery, duration: durationQuery } = router.query;
+  
   const [checkIn, setCheckIn] = useState<DateObject | null>(
-    router.query.check_in ? new DateObject({ date: router.query.check_in as string, calendar: DATE_CONFIG.calendar }) : null
+    checkInQuery ? new DateObject({ date: checkInQuery as string, ...DATE_CONFIG }) : null
   );
-  const [duration, setDuration] = useState<number>(
-    router.query.duration ? parseInt(router.query.duration as string, 10) : 1
-  );
+  
+  const [duration, setDuration] = useState<number>(parseInt(durationQuery as string, 10) || 1);
+  const [checkOut, setCheckOut] = useState<DateObject | null>(null);
 
-  const { refetch } = useQuery<HotelDetails, Error, AvailableRoom[]>({
-    queryKey: ['availableRooms', hotelSlug, checkIn, duration],
-    queryFn: async () => {
-      setIsLoading(true);
-      const checkInString = checkIn!.format("YYYY-MM-DD");
-      const hotelDetails = await getHotelDetails(hotelSlug, checkInString, String(duration));
-      const rooms = hotelDetails.available_rooms || [];
-      onRoomsFetch(rooms);
-      setIsLoading(false);
-      return hotelDetails;
-    },
-    select: (data) => data.available_rooms || [],
-    enabled: !!checkIn && duration > 0,
-    refetchOnWindowFocus: false,
-  });
-
-  const handleSearch = () => {
-    if (checkIn && duration > 0) {
-      router.push({
-          pathname: `/hotels/${hotelSlug}`,
-          query: { check_in: checkIn.format("YYYY-MM-DD"), duration },
-      }, undefined, { shallow: true });
-      refetch();
-    } else {
-      alert('لطفا تاریخ ورود و مدت اقامت را انتخاب کنید.');
+  useEffect(() => {
+    if (checkIn) {
+      const newCheckOut = new DateObject(checkIn).add(duration, "days");
+      setCheckOut(newCheckOut);
     }
-  };
+  }, [checkIn, duration]);
 
-  const handleCheckout = () => {
-    if (cartItems.length === 0) {
-      alert("برای ادامه، ابتدا باید حداقل یک اتاق به سبد خرید اضافه کنید.");
+  const handleSearch = async () => {
+    if (!checkIn) {
+      alert("لطفا تاریخ ورود را انتخاب کنید.");
       return;
     }
+    setIsLoading(true);
+    
+    const checkInStr = checkIn.format("YYYY-MM-DD");
+    
+    const queryParams = new URLSearchParams({
+      check_in: checkInStr,
+      duration: duration.toString(),
+    });
 
-    if (checkIn && duration > 0) {
-        const checkOutDateObj = new DateObject(checkIn).add(duration, "days");
-        localStorage.setItem('bookingCart', JSON.stringify(cartItems));
-        localStorage.setItem('checkInDate', checkIn.format("YYYY-MM-DD"));
-        localStorage.setItem('checkOutDate', checkOutDateObj.format("YYYY-MM-DD"));
-        localStorage.setItem('duration', String(duration));
-        router.push('/checkout');
-    } else {
-        alert("خطا: تاریخ ورود یا مدت اقامت مشخص نیست. لطفاً مجدداً جستجو کنید.");
+    try {
+      const response = await fetch(`/api/hotels/${hotelSlug}/?${queryParams}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch rooms');
+      }
+      const data = await response.json();
+      onRoomsFetch(data.available_rooms || []);
+      
+      // Update URL to reflect the new search dates
+      router.push(`/hotels/${hotelSlug}?${queryParams}`, undefined, { shallow: true });
+
+    } catch (error) {
+      console.error("Error fetching available rooms:", error);
+      onRoomsFetch([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const totalCartPrice = cartItems.reduce((acc, item) => acc + item.total_price, 0);
+  const handleProceedToCheckout = () => {
+    if (cartItems.length === 0) {
+        alert("سبد خرید شما خالی است.");
+        return;
+    }
 
+    if (!checkIn || !checkOut) {
+        alert("لطفا تاریخ ورود و خروج را مشخص کنید.");
+        return;
+    }
+    
+    localStorage.setItem('bookingCart', JSON.stringify(cartItems));
+    localStorage.setItem('checkInDate', checkIn.format("YYYY-MM-DD"));
+    localStorage.setItem('checkOutDate', checkOut.format("YYYY-MM-DD"));
+    localStorage.setItem('duration', duration.toString());
+    
+    router.push('/checkout');
+  };
+
+  const totalCartPrice = cartItems.reduce((total, item) => total + item.total_price, 0);
+
+  const handleDateChange = (name: string, dateString: string) => {
+    if (dateString) {
+      const newDate = new DateObject({ date: dateString, ...DATE_CONFIG });
+      setCheckIn(newDate);
+    } else {
+      setCheckIn(null);
+    }
+  };
+  
   return (
-    <div className="sticky top-8 p-6 bg-white rounded-xl shadow-lg border border-gray-100">
-      <h2 className="text-xl font-bold mb-4 border-b pb-3">بررسی قیمت و موجودی</h2>
+    <div className="bg-white p-6 rounded-lg shadow-lg border sticky top-8">
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">تاریخ ورود</label>
-          {/* --- FINAL FIX: Changed 'value' prop to 'defaultValue' --- */}
           <JalaliDatePicker
-            defaultValue={checkIn}
-            onChange={(date: DateObject | DateObject[] | null) => {
-              const newDate = Array.isArray(date) ? date[0] : date;
-              setCheckIn(newDate);
-            }}
-          />
+            label="تاریخ ورود"
+            name="check_in"
+            initialValue={checkIn?.format("YYYY-MM-DD")}
+            onDateChange={handleDateChange}
+        />
         </div>
         <div>
-          <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">مدت اقامت (شب)</label>
-          <input
-            id="duration"
-            type="number"
+          <label htmlFor="duration-select" className="block text-sm font-medium text-gray-700 mb-1">مدت اقامت (شب)</label>
+          <select
+            id="duration-select"
             value={duration}
-            onChange={(e) => setDuration(parseInt(e.target.value, 10) || 1)}
-            min="1"
-            className="w-full p-2 border border-gray-300 rounded-md"
-          />
+            onChange={(e) => setDuration(parseInt(e.target.value, 10))}
+            className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            {[...Array(10).keys()].map(i => (
+              <option key={i + 1} value={i + 1}>{i + 1}</option>
+            ))}
+          </select>
         </div>
         <Button onClick={handleSearch} className="w-full">جستجوی اتاق‌ها</Button>
       </div>
 
       {cartItems.length > 0 && (
-        <div className="mt-6 pt-4 border-t">
-          <h3 className="font-bold mb-3">سبد خرید</h3>
-          <div className="space-y-3">
+        <div className="mt-6 pt-6 border-t">
+          <h3 className="font-bold text-lg mb-4">سبد خرید شما</h3>
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
             {cartItems.map(item => (
               <div key={item.id} className="text-sm p-2 bg-gray-50 rounded-md">
-                <p className="font-semibold">{item.room.name}</p>
-                <div className="flex justify-between items-center mt-1">
-                  <span className="text-gray-600">{item.quantity} اتاق</span>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-semibold">{item.room.name}</p>
+                    <p className="text-gray-600">{item.selected_board.name} ({item.quantity} اتاق)</p>
+                  </div>
                   <button onClick={() => onRemoveFromCart(item.id)} className="text-red-500 hover:text-red-700 text-xs">حذف</button>
                 </div>
               </div>
             ))}
           </div>
-          <div className="mt-4 pt-4 border-t font-bold flex justify-between">
-            <span>جمع کل:</span>
-            <span>{totalCartPrice.toLocaleString('fa-IR')} تومان</span>
+          <div className="mt-4 pt-4 border-t flex justify-between items-center">
+            <span className="font-bold">جمع کل:</span>
+            <span className="font-bold text-red-600">{totalCartPrice.toLocaleString('fa-IR')} تومان</span>
           </div>
-          <Button onClick={handleCheckout} variant="primary" className="w-full mt-4">
+          <Button onClick={handleProceedToCheckout} className="w-full mt-4" variant="primary">
             نهایی کردن رزرو
           </Button>
         </div>

@@ -1,6 +1,6 @@
 // src/pages/checkout.tsx
-// version: 3.1.0
-// FINAL FIX: Restored all missing logic for pricing, guest management, and submission. Corrected all previous type errors.
+// version: 3.2.0
+// FEATURE: Implemented quantity selection and pricing logic for 'PER_PERSON' services.
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
@@ -32,7 +32,7 @@ const toPersianDigits = (str: string | number | undefined) => {
 
 const CheckoutPage: React.FC = () => {
     const router = useRouter();
-    const { user, isAuthenticated } = useAuth(); // FIX: isUnauthenticated removed
+    const { user, isAuthenticated } = useAuth();
     const [cart, setCart] = useState<CartItem[]>([]);
     const [checkIn, setCheckIn] = useState('');
     const [checkOut, setCheckOut] = useState('');
@@ -59,7 +59,6 @@ const CheckoutPage: React.FC = () => {
             setCheckOut(storedCheckOut);
             setDuration(parseInt(storedDuration, 10));
             
-            // Calculate total guests based on cart items, assuming adults/children are stored in cart
             const totalGuests = parsedCart.reduce((acc: number, item: any) => acc + (item.adults || 0) + (item.children || 0), 0);
             setGuests(Array(totalGuests > 0 ? totalGuests : 1).fill({}));
         } else {
@@ -67,7 +66,6 @@ const CheckoutPage: React.FC = () => {
         }
     }, [router]);
 
-    // --- FIX: RESTORED THE COMPLETE useQuery LOGIC ---
     const { data: bookingDetails, isLoading: priceLoading } = useQuery<MultiPriceData>({
         queryKey: ['calculatePriceCheckout', cart, checkIn, checkOut, user],
         queryFn: () => {
@@ -75,7 +73,6 @@ const CheckoutPage: React.FC = () => {
                 room_type_id: item.room.id,
                 board_type_id: item.selected_board.id,
                 quantity: item.quantity,
-                // These fields might be required by your pricing API
                 extra_adults: (item.adults || 0) - (item.room.base_capacity || 0) > 0 ? (item.adults || 0) - (item.room.base_capacity || 0) : 0,
                 children_count: item.children || 0,
             }));
@@ -87,10 +84,9 @@ const CheckoutPage: React.FC = () => {
                 user_id: user?.id,
             });
         },
-        // This query should only run when all necessary data is available
         enabled: cart.length > 0 && !!checkIn && !!checkOut && duration > 0,
-        refetchOnWindowFocus: false, // Prevents refetching on window focus
-        staleTime: 5 * 60 * 1000, // Cache data for 5 minutes
+        refetchOnWindowFocus: false,
+        staleTime: 5 * 60 * 1000,
     });
 
     const hotelId = useMemo(() => cart.length > 0 ? (cart[0].room as any).hotel_id : undefined, [cart]);
@@ -105,7 +101,6 @@ const CheckoutPage: React.FC = () => {
         mutationFn: (data: BookingPayload) => createBooking(data),
         onSuccess: (data) => {
             localStorage.removeItem('bookingCart');
-            // Redirect to a page that handles offline payment instructions
             if (data.booking_code) {
                  router.push(`/booking-success-transfer?booking_code=${data.booking_code}`);
             } else {
@@ -122,25 +117,69 @@ const CheckoutPage: React.FC = () => {
         setGuests(prev => prev.map((guest, i) => i === index ? { ...guest, ...data } : guest));
     };
     
-    // ... (Service handler functions remain the same) ...
+    // --- MODIFIED: Handle 'PER_PERSON' pricing model on service selection ---
     const handleSelectService = (service: HotelService) => {
+        const totalGuests = guests.length;
+
+        if (service.pricing_model === 'PERSON') {
+            const quantityInput = window.prompt(`این سرویس برای چند نفر است؟ (حداکثر ${totalGuests} نفر)`, "1");
+            if (quantityInput === null) return; // User cancelled
+
+            const quantity = parseInt(quantityInput, 10);
+            if (isNaN(quantity) || quantity <= 0 || quantity > totalGuests) {
+                alert(`لطفاً یک عدد معتبر بین ۱ و ${totalGuests} وارد کنید.`);
+                return;
+            }
+
+            if (service.service_type.requires_details) {
+                // We'll pass the quantity to the modal later if needed, for now, just open it
+                setCurrentService(service);
+                setIsModalOpen(true);
+                // For now, we add it with details empty, details are saved via handleSaveServiceDetails
+                setSelectedServices(prev => [...prev, { id: service.id, quantity, details: {} }]);
+            } else {
+                setSelectedServices(prev => [...prev, { id: service.id, quantity, details: {} }]);
+            }
+        } else {
+            if (service.service_type.requires_details) {
+                setCurrentService(service);
+                setIsModalOpen(true);
+            } else {
+                setSelectedServices(prev => [...prev, { id: service.id, quantity: 1, details: {} }]);
+            }
+        }
+    };
+    
+    // --- MODIFIED: Handle quantity editing for 'PER_PERSON' services ---
+    const handleEditService = (selected: SelectedServicePayload) => {
+        const service = availableServices?.find(s => s.id === selected.id);
+        if (!service) return;
+        
+        const totalGuests = guests.length;
+
+        if (service.pricing_model === 'PERSON') {
+            const quantityInput = window.prompt(`این سرویس برای چند نفر است؟ (حداکثر ${totalGuests} نفر)`, `${selected.quantity}`);
+            if (quantityInput === null) return; // User cancelled
+
+            const quantity = parseInt(quantityInput, 10);
+            if (isNaN(quantity) || quantity <= 0 || quantity > totalGuests) {
+                alert(`لطفاً یک عدد معتبر بین ۱ و ${totalGuests} وارد کنید.`);
+                return;
+            }
+
+            // Update the quantity for the existing service
+            setSelectedServices(prev => prev.map(s => s.id === service.id ? { ...s, quantity } : s));
+        }
+        
         if (service.service_type.requires_details) {
             setCurrentService(service);
             setIsModalOpen(true);
-        } else {
-            setSelectedServices(prev => [...prev, { id: service.id, quantity: 1, details: {} }]);
         }
     };
-    const handleEditService = (selected: SelectedServicePayload) => {
-        const service = availableServices?.find(s => s.id === selected.id);
-        if (service?.service_type.requires_details) {
-            setCurrentService(service);
-            setIsModalOpen(true);
-        }
-    };
+
     const handleSaveServiceDetails = (details: Record<string, any>) => {
         if (currentService) {
-            setSelectedServices(prev => [ ...prev.filter(s => s.id !== currentService.id), { id: currentService.id, quantity: 1, details }]);
+            setSelectedServices(prev => prev.map(s => s.id === currentService.id ? { ...s, details } : s));
         }
         setIsModalOpen(false);
         setCurrentService(null);
@@ -172,19 +211,14 @@ const CheckoutPage: React.FC = () => {
         mutation.mutate(payload);
     };
     
-    // This function should be placed inside the CheckoutPage component in src/pages/checkout.tsx
-
     const CheckoutSummary = () => {
-        // Calculate the total price of selected services
         const totalServicesPrice = useMemo(() => {
             return selectedServices.reduce((total, selected) => {
                 const serviceInfo = availableServices?.find(s => s.id === selected.id);
                 if (!serviceInfo) return total;
                 
-                // Handle different pricing models if necessary
                 let price = 0;
                 if (serviceInfo.pricing_model === 'PERSON') {
-                    // Assuming quantity is the number of people for this service
                     price = serviceInfo.price * selected.quantity;
                 } else if (serviceInfo.pricing_model === 'BOOKING') {
                     price = serviceInfo.price;
@@ -194,10 +228,8 @@ const CheckoutPage: React.FC = () => {
             }, 0);
         }, [selectedServices, availableServices]);
 
-        // Calculate the final total price by adding room prices and service prices
         const finalTotalPrice = (bookingDetails?.total_price ?? 0) + totalServicesPrice;
 
-        // Format dates for display
         const formattedCheckIn = checkIn ? new DateObject({ date: checkIn, calendar: DATE_CONFIG.calendar, locale: DATE_CONFIG.locale }).format("dddd D MMMM") : '';
         const formattedCheckOut = checkOut ? new DateObject({ date: checkOut, calendar: DATE_CONFIG.calendar, locale: DATE_CONFIG.locale }).format("dddd D MMMM") : '';
 
@@ -236,10 +268,21 @@ const CheckoutPage: React.FC = () => {
                          <ul className="space-y-2 text-sm">
                             {selectedServices.map(s => {
                                 const serviceInfo = availableServices?.find(i => i.id === s.id);
+                                if (!serviceInfo) return null;
+
+                                const itemTotalPrice = serviceInfo.price * s.quantity;
+                                const displayPrice = serviceInfo.price > 0 
+                                    ? `${toPersianDigits(itemTotalPrice.toLocaleString())} تومان` 
+                                    : 'رایگان';
+                                
+                                const quantityLabel = serviceInfo.pricing_model === 'PERSON' && s.quantity > 1 
+                                    ? ` (${toPersianDigits(s.quantity)} نفر)` 
+                                    : '';
+
                                 return (
                                     <li key={s.id} className="flex justify-between items-center text-gray-700">
-                                        <span>{serviceInfo?.name}</span>
-                                        <span className="font-medium">{serviceInfo?.price && serviceInfo.price > 0 ? `${toPersianDigits(serviceInfo.price.toLocaleString())} تومان` : 'رایگان'}</span>
+                                        <span>{serviceInfo.name}{quantityLabel}</span>
+                                        <span className="font-medium">{displayPrice}</span>
                                     </li>
                                 );
                             })}
@@ -275,13 +318,12 @@ const CheckoutPage: React.FC = () => {
                                 <h2 className="text-2xl font-bold mb-4">اطلاعات میهمانان</h2>
                                 <p className="text-sm text-gray-500 mb-4 p-3 bg-blue-50 rounded-md flex items-center"><Info className="ml-2 w-5 h-5 text-blue-500"/>اطلاعات نفر اول به عنوان سرپرست رزرو در نظر گرفته می‌شود.</p>
                                  {guests.map((guest, index) => (
-                                    // --- FINAL FIX: Providing all required props ---
                                     <GuestInputForm
                                         key={index}
                                         index={index}
-                                        value={guest} // FIX: Pass the guest data to the component
-                                        onChange={handleGuestChange} // Correct handler name
-                                        isPrincipal={index === 0} // FIX: Tell the component if it's the principal guest
+                                        value={guest}
+                                        onChange={handleGuestChange}
+                                        isPrincipal={index === 0}
                                         containerClass={index === 0 ? "bg-yellow-50" : "bg-gray-50"}
                                         isUnauthenticated={!isAuthenticated}                                   />
                                 ))}

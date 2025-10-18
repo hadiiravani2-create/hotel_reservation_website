@@ -15,6 +15,10 @@ export interface HotelDetails {
     address: string;
     images: { image: string; caption: string | null; }[];
     amenities: { id: number; name: string; icon: string | null; }[];
+    latitude: string;
+    longitude: string;
+    is_online: boolean;
+    policies: string | null;
     rules: string | null;
     check_in_time: string | null;
     check_out_time: string | null;

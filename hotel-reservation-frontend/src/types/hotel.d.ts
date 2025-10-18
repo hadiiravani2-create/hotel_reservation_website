@@ -116,6 +116,7 @@ export interface AvailableRoom {
   base_capacity: number;
   extra_capacity: number;
   child_capacity: number;
+  bed_type: string | null;
   images: RoomImage[];
   amenities: Amenity[];
   priced_board_types: PricedBoardType[];
