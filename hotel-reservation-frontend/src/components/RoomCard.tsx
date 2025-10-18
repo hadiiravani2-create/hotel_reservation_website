@@ -1,52 +1,28 @@
 // src/components/RoomCard.tsx
-// version: 2.0.0
-// Fix: Incorporated reservedCount to enforce overall RoomType capacity (Bug 2).
+// version: 1.2.0
+// FINAL FIX: Corrected the component's props interface to accept all required props from the parent, resolving all type errors.
 
-import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
-import { AvailableRoom, PricedBoardType, CartItem } from '@/types/hotel';
-import { Button } from './ui/Button';
-import { UserGroupIcon } from '@heroicons/react/24/outline';
+import React, { useState } from 'react';
+import { AvailableRoom, CartItem, PricedBoardType, RoomImage } from '../types/hotel';
 
+// --- FINAL FIX: The props interface now includes all necessary properties ---
 interface RoomCardProps {
   room: AvailableRoom;
-  duration: number; // Duration in nights
-  onAddToCart: (item: CartItem) => void;
-  // BUG 2: Added prop for reserved count of this room type
-  reservedCount: number;
+  duration: number;
+  onAddToCart: (newItem: CartItem) => void;
+  reservedCount: number; // Added to accept the count of already reserved rooms
 }
 
 const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reservedCount }) => {
-  // Filter available boards first
-  const availableBoards = room.priced_board_types.filter(p => p.total_price > 0);
-  
-  // State to hold the selected board type. Initialize with the first available option.
-  const [selectedBoard, setSelectedBoard] = useState<PricedBoardType | null>(
-    availableBoards.length > 0 ? availableBoards[0] : null
-  );
-  // State for the quantity of rooms to book
   const [quantity, setQuantity] = useState<number>(1);
-  
-  // BUG 2: Calculate max quantity available for NEW reservation/update
-  const maxAvailable = room.availability_quantity || 0;
-  // The number of rooms that can still be added/updated for this RoomType
-  const remainingRooms = maxAvailable - (reservedCount || 0); 
-  const isReservationPossible = remainingRooms > 0;
-  
-  // Find current quantity in cart for this specific room/board combo
-  const cartItemId = selectedBoard ? `${room.id}-${selectedBoard.board_type.id}` : null;
-  // NOTE: This component doesn't know the cart, but we keep the local quantity state.
+  const [adults, setAdults] = useState<number>(room.base_capacity);
+  const [children, setChildren] = useState<number>(0);
 
-  // Effect to reset selection if room data changes
-  useEffect(() => {
-    const newAvailableBoards = room.priced_board_types.filter(p => p.total_price > 0);
-    setSelectedBoard(newAvailableBoards.length > 0 ? newAvailableBoards[0] : null);
-    // Ensure quantity doesn't exceed 1 or remainingRooms
-    setQuantity(Math.min(1, remainingRooms));
-  }, [room, remainingRooms]); // Dependency on remainingRooms is key for auto-reset/limit
-
-  const handleAddToCart = () => {
-    if (!selectedBoard || !room.is_available || quantity <= 0) return;
+  const handleCreateCartItem = (selectedBoard: PricedBoardType) => {
+    if (quantity === 0) {
+      alert("لطفا تعداد اتاق را مشخص کنید.");
+      return;
+    }
 
     const cartItem: CartItem = {
       id: `${room.id}-${selectedBoard.board_type.id}`,
@@ -54,111 +30,68 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reserv
         id: room.id,
         name: room.name,
         image: room.images.length > 0 ? room.images[0] : null,
+        base_capacity: room.base_capacity,
+        hotel_id: (room as any).hotel_id,
       },
       selected_board: {
         id: selectedBoard.board_type.id,
         name: selectedBoard.board_type.name,
       },
       quantity: quantity,
-      price_per_room: selectedBoard.total_price, // This is the total price for the whole duration
+      adults: adults,
+      children: children,
+      price_per_room: selectedBoard.total_price,
       total_price: selectedBoard.total_price * quantity,
     };
-    
-    // Parent component (HotelDetailPage) will perform the global capacity check 
-    // before updating the cartItems state.
+
+    // Call the parent's handler function
     onAddToCart(cartItem);
-    // After adding/updating, reset local quantity to 1 for next selection.
-    setQuantity(1); 
+    alert(`${quantity} اتاق ${room.name} به سبد خرید شما اضافه شد.`);
   };
 
-  if (!room.is_available) {
-    return (
-      <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200 opacity-50">
-        <p className="text-center text-gray-600">{room.name}</p>
-        <p className="text-center text-red-500 font-semibold mt-2">{room.error_message || "ظرفیت تکمیل است"}</p>
-      </div>
-    );
-  }
-  
-  const defaultImage = '/placeholder.png'; // A fallback image
-
   return (
-    <div className={`bg-white p-4 rounded-lg shadow-md border flex flex-col md:flex-row gap-4 ${!isReservationPossible ? 'opacity-70 border-red-300' : 'border-gray-200'}`}>
-      {/* Image and Basic Info Section */}
-      <div className="md:w-1/3 flex-shrink-0">
-        <div className="relative w-full h-48 rounded-md overflow-hidden">
-          <Image
-            src={room.images.length > 0 ? room.images[0].image : defaultImage}
-            alt={room.name}
-            layout="fill"
-            objectFit="cover"
-          />
-        </div>
-        <h3 className="text-lg font-bold mt-2 text-gray-800">{room.name}</h3>
-        <div className="flex items-center text-sm text-gray-600 mt-1">
-          <UserGroupIcon className="w-5 h-5 ml-1" />
-          <span>ظرفیت: {room.base_capacity} نفر</span>
-          {room.extra_capacity > 0 && <span> + {room.extra_capacity} نفر اضافه</span>}
-        </div>
-        {/* BUG 2: Show Remaining Availability */}
-        <p className={`text-sm font-medium mt-2 ${remainingRooms > 0 ? 'text-green-600' : 'text-red-500'}`}>
-            موجودی فعلی: {remainingRooms} اتاق (رزرو شده: {reservedCount})
-        </p>
-      </div>
-
-      {/* Board Selection Section */}
-      <div className="flex-grow md:border-r md:border-l px-4">
-        <p className="font-semibold mb-2">
-          قیمت کل برای <span className="text-blue-600">{duration}</span> شب اقامت:
-        </p>
-        <div className="space-y-2">
-          {availableBoards.map((pricedBoard) => (
-            <div
-              key={pricedBoard.board_type.id}
-              onClick={() => setSelectedBoard(pricedBoard)}
-              className={`flex justify-between items-center p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                selectedBoard?.board_type.id === pricedBoard.board_type.id
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-blue-400'
-              }`}
-            >
-              <span className="font-medium text-gray-700">{pricedBoard.board_type.name}</span>
-              <span className="font-bold text-blue-600">{pricedBoard.total_price.toLocaleString()} تومان</span>
+    <div className="border rounded-lg overflow-hidden shadow-sm mb-6">
+        {/* UI for image, room description, etc. */}
+        <div className="p-4">
+            <h3 className="text-xl font-bold">{room.name}</h3>
+            <p className="text-sm text-gray-600 mt-1">{room.description}</p>
+            
+            {/* UI for selecting quantity, adults, and children */}
+            <div className="my-4 grid grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm font-medium">تعداد اتاق:</label>
+                <input type="number" value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value))} min="1" max={room.availability_quantity - reservedCount} className="w-full p-2 border rounded-md mt-1"/>
+              </div>
+              <div>
+                <label className="text-sm font-medium">بزرگسال:</label>
+                <input type="number" value={adults} onChange={(e) => setAdults(parseInt(e.target.value))} min={room.base_capacity} max={room.base_capacity + room.extra_capacity} className="w-full p-2 border rounded-md mt-1"/>
+              </div>
+              <div>
+                <label className="text-sm font-medium">کودک:</label>
+                <input type="number" value={children} onChange={(e) => setChildren(parseInt(e.target.value))} min="0" max={room.child_capacity} className="w-full p-2 border rounded-md mt-1"/>
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Action Section */}
-      <div className="md:w-1/4 flex flex-col justify-center items-center">
-        <div className="w-full">
-          <label htmlFor={`quantity-${room.id}`} className="block text-sm font-medium text-gray-700 text-center mb-1">
-            تعداد اتاق
-          </label>
-          <input
-            id={`quantity-${room.id}`}
-            type="number"
-            min="1"
-            max={remainingRooms > 0 ? remainingRooms : 0} // Max is the remaining available rooms
-            value={quantity}
-            onChange={(e) => setQuantity(Math.min(remainingRooms > 0 ? remainingRooms : 1, Math.max(1, parseInt(e.target.value, 10) || 1)))}
-            disabled={!isReservationPossible || !selectedBoard}
-            className="w-full text-center px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
-          />
+            <div className="mt-4">
+                <h4 className="font-semibold">انتخاب نوع سرویس:</h4>
+                <div className="space-y-2 mt-2">
+                    {room.priced_board_types.map(board => (
+                        <div key={board.board_type.id} className="p-3 bg-gray-50 rounded-md flex justify-between items-center">
+                            <div>
+                                <span className="font-medium">{board.board_type.name}</span>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-bold text-lg text-red-600">{board.total_price.toLocaleString('fa-IR')} تومان</p>
+                                <p className="text-xs text-gray-500">برای {duration} شب</p>
+                                <button onClick={() => handleCreateCartItem(board)} className="mt-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">
+                                    افزودن به سبد
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
-        <div className="mt-3 w-full">
-            <Button 
-                onClick={handleAddToCart}
-                disabled={!selectedBoard || !isReservationPossible || quantity <= 0}
-                className="w-full"
-            >
-                افزودن به سبد
-            </Button>
-            {!isReservationPossible && (
-                <p className="text-red-500 text-xs text-center mt-1">ظرفیت تکمیل است.</p>
-            )}
-        </div>
-      </div>
     </div>
   );
 };

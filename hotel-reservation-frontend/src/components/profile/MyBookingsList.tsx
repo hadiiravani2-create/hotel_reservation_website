@@ -1,6 +1,7 @@
 // src/components/profile/MyBookingsList.tsx
-// version: 1.0.4
-// FIX: Corrected a syntax error (unterminated string constant) in a className.
+// version: 1.0.5
+// FIX: Corrected JSX parsing error by refactoring conditional rendering logic for buttons.
+// FIX: Corrected syntax error by adding a missing comma in the statusMap object.
 
 import React, { useCallback } from 'react';
 import { useRouter } from 'next/router';
@@ -20,6 +21,7 @@ const statusMap: Record<BookingStatus, { label: string; color: string }> = {
   cancelled: { label: 'لغو شده', color: 'text-red-700 bg-red-100' },
   cancellation_requested: { label: 'درخواست لغو', color: 'text-orange-600 bg-orange-100' },
   modification_requested: { label: 'درخواست ویرایش', color: 'text-blue-600 bg-blue-100' },
+  no_capacity: { label: 'عدم ظرفیت', color: 'text-gray-600 bg-gray-200' },
 };
 
 const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> = ({ booking, onAction }) => {
@@ -83,13 +85,14 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
         {booking.room_summary}
       </p>
 
-      {/* FIX: Corrected the unterminated string in className */}
       <div className="flex justify-end space-x-4 space-x-reverse pt-4 border-t">
-        {booking.status === 'pending' ? (
+        {booking.status === 'pending' && (
             <Button onClick={() => router.push(`/payment/${booking.booking_code}`)} variant="primary" size="sm">
                 تکمیل پرداخت
             </Button>
-        ) : (
+        )}
+
+        {booking.status !== 'pending' && booking.status !== 'awaiting_confirmation' && booking.status !== 'no_capacity' && (
             <Button onClick={() => router.push(`/payment/${booking.booking_code}`)} variant="secondary" size="sm" className="flex items-center">
                 <FaInfoCircle className="ml-1" />
                 مشاهده جزئیات

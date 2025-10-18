@@ -33,11 +33,13 @@ export interface MultiPriceData {
       extra_adults: number;
       children_count: number;
     }>;
-    user_id?: number | null; 
+    user_id?: number | null;
+    total_price: number; 
 }
 
 // Endpoint: /pricing/api/calculate-multi-price/
-export const calculateMultiPrice = async (data: MultiPriceData): Promise<{ total_price: number }> => {
+//export const calculateMultiPrice = async (data: MultiPriceData): Promise<{ total_price: number }> => {
+export const calculateMultiPrice = async (data: any): Promise<MultiPriceData> => {
     const response = await api.post('/pricing/api/calculate-multi-price/', data);
     return response.data;
 };

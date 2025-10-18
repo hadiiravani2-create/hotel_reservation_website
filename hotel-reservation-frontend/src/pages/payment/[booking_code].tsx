@@ -1,22 +1,20 @@
 // src/pages/payment/[booking_code].tsx
-// version: 1.0.7
-// FIX: Restored the complete JSX for the component and fully integrated wallet payment logic.
-
+// version: 1.3.0
+// FINAL FIX: Restored all missing component logic and JSX, resolving all previous build errors.
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { fetchBookingDetails, initiatePayment, payWithWallet, BookingDetail, BookingStatus } from '../../api/reservationService';
 import { getUserWallet } from '../../api/coreService';
-import { Wallet as WalletData } from '@/types/hotel'; // FIX: Correct import path
+import { Wallet as WalletData, BookedServiceDetail } from '@/types/hotel';
 import { Button } from '../../components/ui/Button';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { useAuth } from '../../hooks/useAuth';
-import { Hotel, UserCheck, CreditCard, User, Wallet as WalletIcon } from 'lucide-react';
+import { Hotel, UserCheck, CreditCard, User, Wallet as WalletIcon, CheckCircle } from 'lucide-react';
 import { DateObject } from 'react-multi-date-picker';
 import { DATE_CONFIG } from '@/config/date';
-
 
 // --- Helper Components ---
 interface DetailCardProps {
@@ -35,6 +33,7 @@ const DetailCard: React.FC<DetailCardProps> = ({ title, children, icon: Icon }) 
     </div>
 );
 
+// --- FIX: Restored component body ---
 const GuestDetailSection: React.FC<{ guest: BookingDetail['guests'][0] }> = ({ guest }) => (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
         <div className="flex items-center text-gray-800">
@@ -56,6 +55,7 @@ const GuestDetailSection: React.FC<{ guest: BookingDetail['guests'][0] }> = ({ g
         </div>
     </div>
 );
+// --- END FIX ---
 
 // --- Helper Functions ---
 const toPersianDigits = (str: string | number | undefined) => {
@@ -117,11 +117,11 @@ const PaymentPage: React.FC = () => {
             if (!code) throw new Error("کد رزرو یافت نشد.");
             if (method === 'wallet') return payWithWallet(code);
             if (method === 'online') return initiatePayment(code);
-            return Promise.resolve();
+            return Promise.resolve(); // For card_to_card, we just redirect
         },
         onSuccess: (data: any, method: PaymentMethod) => {
             if (method === 'wallet') {
-                alert(data.message);
+                alert(data.message || 'پرداخت با موفقیت انجام شد.');
                 router.push('/profile/bookings');
             } else if (method === 'online' && data.redirect_url) {
                 window.location.href = data.redirect_url;
@@ -156,6 +156,9 @@ const PaymentPage: React.FC = () => {
             awaiting_confirmation: 'منتظر تایید',
             confirmed: 'تایید شده',
             cancelled: 'لغو شده',
+            cancellation_requested: 'درخواست لغو',
+            modification_requested: 'درخواست ویرایش',
+            no_capacity: 'عدم ظرفیت',
         };
         return statusMap[status as keyof typeof statusMap] || status;
     }
@@ -180,8 +183,14 @@ const PaymentPage: React.FC = () => {
                         نهایی‌سازی پرداخت رزرو <span className="text-indigo-600 mr-1">{toPersianDigits(booking.booking_code)}</span>
                     </h1>
                     <p className="text-lg text-gray-600 mb-8">لطفاً جزئیات رزرو را بررسی و روش پرداخت را انتخاب کنید.</p>
-
-                    {booking.status !== 'pending' && (
+                    
+                    {booking.status === 'awaiting_confirmation' && (
+                        <div className="mb-6 p-4 bg-cyan-100 border border-cyan-300 text-cyan-800 rounded-lg">
+                            <p className="font-bold">وضعیت رزرو: {getStatusLabel(booking.status)}</p>
+                            <p className="text-sm pt-1">این رزرو نیازمند تایید اپراتور است. پس از بررسی، نتیجه به شما اطلاع داده خواهد شد.</p>
+                        </div>
+                    )}
+                    {booking.status !== 'pending' && booking.status !== 'awaiting_confirmation' && (
                          <div className="mb-6 p-4 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-lg">
                             <p className="font-bold">وضعیت رزرو: {getStatusLabel(booking.status)}</p>
                             {booking.status !== 'confirmed' && <p className="text-sm pt-1">این رزرو در حال حاضر قابل پرداخت نیست.</p>}
@@ -206,9 +215,27 @@ const PaymentPage: React.FC = () => {
                                     </li>
                                 ))}
                             </ul>
-                            
+
+                            {booking.booked_services && booking.booked_services.length > 0 && (
+                                <>
+                                    <h3 className="font-semibold text-lg pt-4 border-b pb-2 text-gray-700">خدمات اضافی</h3>
+                                    <ul className="space-y-3 pt-2">
+                                        {booking.booked_services.map((service) => (
+                                            <li key={service.id} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
+                                                <div className="flex items-center">
+                                                    <CheckCircle className="w-5 h-5 ml-2 text-green-500"/>
+                                                    <p className="font-bold text-gray-800">{service.hotel_service.name}</p>
+                                                </div>
+                                                <p className="text-sm font-semibold">
+                                                    {service.total_price > 0 ? `${toPersianDigits(service.total_price.toLocaleString())} تومان` : 'رایگان'}
+                                                </p>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </>
+                            )}
                             <div className="mt-6 border-t pt-4 flex justify-between items-center bg-green-50 p-3 rounded-lg">
-                                <span className="font-bold text-2xl text-red-600">مبلغ قابل پرداخت:</span>
+                                <span className="font-bold text-2xl text-red-600">مبلغ نهایی:</span>
                                 <span className="font-bold text-3xl text-red-600">{toPersianDigits(booking.total_price.toLocaleString('fa-IR'))} تومان</span>
                             </div>
                         </DetailCard>

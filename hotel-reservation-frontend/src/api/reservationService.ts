@@ -4,8 +4,8 @@
 
 import api from './coreService';
 import moment from 'moment-jalaali';
-import { OfflineBank } from '@/types/hotel'; // Import from central types file
-
+import { BookedServiceDetail } from '@/types/hotel';
+import { OfflineBank, SelectedServicePayload } from '@/types/hotel';
 // ... (GuestPayload, BookingPayload, BookingResponse interfaces remain unchanged)
 export interface GuestPayload {
   first_name: string;
@@ -33,6 +33,7 @@ export interface BookingPayload {
   guests: Array<GuestPayload>;
   rules_accepted: boolean;
   agency_id?: number | null;
+  selected_services?: SelectedServicePayload[];
 }
 
 interface BookingResponse {
@@ -62,7 +63,7 @@ export interface BookingRoomDetail {
     children: number;
     extra_requests: string | null;
 }
-export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'cancellation_requested' | 'modification_requested' | 'awaiting_confirmation';
+export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'cancellation_requested' | 'modification_requested' | 'awaiting_confirmation'| 'no_capacity';
 export interface BookingDetail {
     booking_code: string;
     hotel_name: string;
@@ -75,6 +76,7 @@ export interface BookingDetail {
     total_guests: number;
     booking_rooms: BookingRoomDetail[];
     guests: GuestDetail[];
+    booked_services?: BookedServiceDetail[];
 }
 
 // ... (BookingListItem, GuestLookupPayload interfaces remain unchanged)

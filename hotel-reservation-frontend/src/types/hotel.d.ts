@@ -50,6 +50,22 @@ export interface SuggestedHotel {
   main_image: string | null;
 }
 
+export interface ServiceType {
+  id: number;
+  name: string;
+  requires_details: boolean;
+}
+
+export interface HotelService {
+  id: number;
+  name: string;
+  description: string;
+  pricing_model: 'PERSON' | 'BOOKING' | 'FREE';
+  price: number;
+  service_type: ServiceType;
+}
+
+
 /**
  * Represents a single amenity for a hotel or room.
  * Based on hotels.models.Amenity
@@ -112,12 +128,15 @@ export interface AvailableRoom {
 /**
  * Represents an item that the user has added to their booking cart.
  */
+
 export interface CartItem {
-  id: string;
+  id: string; // A unique identifier for the cart item instance
   room: {
     id: number;
     name: string;
     image: RoomImage | null;
+    base_capacity: number; // Added for price calculation
+    hotel_id?: number; // Added to easily get hotel id
   };
   selected_board: {
     id: number;
@@ -126,6 +145,8 @@ export interface CartItem {
   quantity: number;
   price_per_room: number;
   total_price: number;
+  adults: number; // Added to store number of adults
+  children: number; // Added to store number of children
 }
 
 /**
@@ -176,4 +197,19 @@ export interface BookingRequestPayload {
 
     // List of all guests (first_name, last_name, etc.)
     all_guests: GuestInfo[];
+}
+
+// Interface for the data sent to the backend
+export interface SelectedServicePayload {
+  id: number; // HotelService ID
+  quantity: number;
+  details?: Record<string, any>; // For extra info like flight number
+}
+
+export interface BookedServiceDetail {
+  id: number;
+  hotel_service: HotelService;
+  quantity: number;
+  total_price: number;
+  details?: Record<string, any>;
 }
