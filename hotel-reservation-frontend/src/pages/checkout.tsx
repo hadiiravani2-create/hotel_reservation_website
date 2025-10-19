@@ -1,6 +1,6 @@
 // src/pages/checkout.tsx
-// version: 4.0.0
-// REFACTOR: Complete overhaul to implement dynamic occupancy management and pricing.
+// version: 4.2.0
+// REFACTOR: Moved ServicesStep to the sidebar and implemented new interaction logic and UI.
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
@@ -16,11 +16,11 @@ import { Button } from '../components/ui/Button';
 import GuestInputForm from '../components/GuestInputForm';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import ServicesStep from '../components/checkout/ServicesStep';
+// ServicesStep is now redesigned and used differently
 import ServiceDetailsModal from '../components/checkout/ServiceDetailsModal';
 
 // Icons
-import { Info, Plus, Minus, ChevronDown, Users } from 'lucide-react';
+import { Info, Plus, Minus, ChevronDown } from 'lucide-react';
 import { DateObject } from "react-multi-date-picker";
 import { DATE_CONFIG } from '@/config/date';
 
@@ -30,16 +30,72 @@ const toPersianDigits = (str: string | number | undefined | null) => {
     return String(str).replace(/[0-9]/g, (d) => persianDigits[parseInt(d)]);
 };
 
-// --- start modify ---
-
 // A type to hold the occupancy details for each cart item
 type OccupancyDetail = {
   extra_adults: number;
   children: number;
 };
 
-// Helper component for managing occupancy of a single room type from the cart
+// --- start modify ---
 
+// Redesigned ServicesStep component for the sidebar
+interface ServicesStepProps {
+  services: HotelService[];
+  selectedServices: SelectedServicePayload[];
+  onSelectService: (servicePayload: SelectedServicePayload) => void;
+  onRemoveService: (serviceId: number) => void;
+  totalGuests: number;
+}
+
+const ServicesStep: React.FC<ServicesStepProps> = ({ services, selectedServices, onSelectService, onRemoveService, totalGuests }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const isSelected = (serviceId: number) => {
+    return selectedServices.some(s => s.id === serviceId);
+  };
+
+  const handleSelect = (service: HotelService) => {
+    const quantity = service.pricing_model === 'PERSON' ? totalGuests : 1;
+    onSelectService({ id: service.id, quantity, details: {} });
+  };
+  
+  const servicesToShow = isExpanded ? services : services.slice(0, 1);
+
+  return (
+    <div className="p-4 bg-white rounded-xl shadow-lg border border-gray-100 mb-6">
+      <h3 className="text-lg font-bold mb-3">خدمات اضافی</h3>
+      <div className="space-y-3">
+        {servicesToShow.map(service => (
+          <div key={service.id} className="flex justify-between items-center text-sm">
+            <span className="font-semibold text-gray-700 flex-1">{service.name}</span>
+            <span className="text-gray-600 mx-2">
+              {service.price > 0 ? `${toPersianDigits(service.price.toLocaleString())} ت` : 'رایگان'}
+              {service.pricing_model === 'PERSON' && <span className="text-xs"> (هر نفر)</span>}
+            </span>
+            {isSelected(service.id) ? (
+              <Button onClick={() => onRemoveService(service.id)} variant="danger" size="sm" className="w-auto px-2 py-1 text-xs">
+                حذف
+              </Button>
+            ) : (
+              <Button onClick={() => handleSelect(service)} variant="outline" size="sm" className="w-auto px-2 py-1 text-xs">
+                افزودن
+              </Button>
+            )}
+          </div>
+        ))}
+        {services.length > 1 && (
+            <button onClick={() => setIsExpanded(!isExpanded)} className="text-blue-600 text-sm font-semibold w-full flex items-center justify-center pt-2">
+                {isExpanded ? 'نمایش کمتر' : `نمایش سایر خدمات (${toPersianDigits(services.length - 1)})`}
+                <ChevronDown className={`w-4 h-4 mr-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+            </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
+// Helper component for managing occupancy of a single room type from the cart
 interface RoomOccupancyManagerProps {
   item: CartItem;
   occupancy: OccupancyDetail;
@@ -128,6 +184,7 @@ const AccordionSection: React.FC<AccordionSectionProps> = ({ title, isOpen, onTo
     )}
   </div>
 );
+// end modify
 
 
 const CheckoutPage: React.FC = () => {
@@ -147,6 +204,7 @@ const CheckoutPage: React.FC = () => {
     const [currentService, setCurrentService] = useState<HotelService | null>(null);
 
     const [occupancyDetails, setOccupancyDetails] = useState<Record<string, OccupancyDetail>>({});
+    const [isOccupancyOpen, setOccupancyOpen] = useState(true);
     const [isGuestDetailsOpen, setGuestDetailsOpen] = useState(false);
 
     useEffect(() => {
@@ -162,7 +220,6 @@ const CheckoutPage: React.FC = () => {
             setCheckOut(storedCheckOut);
             setDuration(parseInt(storedDuration, 10));
             
-            // Initialize occupancy details for each cart item
             const initialOccupancy = parsedCart.reduce((acc, item) => {
               acc[item.id] = { extra_adults: 0, children: 0 };
               return acc;
@@ -175,6 +232,7 @@ const CheckoutPage: React.FC = () => {
     }, [router]);
     
     const totalGuests = useMemo(() => {
+      if (Object.keys(occupancyDetails).length === 0) return 0;
       return cart.reduce((total, item) => {
         const occupancy = occupancyDetails[item.id] || { extra_adults: 0, children: 0 };
         const guestsPerRoom = item.room.base_capacity + occupancy.extra_adults + occupancy.children;
@@ -183,7 +241,9 @@ const CheckoutPage: React.FC = () => {
     }, [cart, occupancyDetails]);
 
     useEffect(() => {
-      setGuests(Array(totalGuests > 0 ? totalGuests : 1).fill({}));
+      if (totalGuests > 0) {
+        setGuests(Array(totalGuests).fill({}));
+      }
     }, [totalGuests]);
 
     const { data: bookingDetails, isLoading: priceLoading } = useQuery<MultiPriceData>({
@@ -217,7 +277,7 @@ const CheckoutPage: React.FC = () => {
         enabled: !!hotelId,
     });
 
-    const mutation = useMutation<BookingResponse, any, BookingPayload>({	    
+    const mutation = useMutation<BookingResponse, any, BookingPayload>({
         mutationFn: (data: BookingPayload) => createBooking(data),
         onSuccess: (data) => {
             localStorage.removeItem('bookingCart');
@@ -241,9 +301,21 @@ const CheckoutPage: React.FC = () => {
         setGuests(prev => prev.map((guest, i) => i === index ? { ...guest, ...data } : guest));
     };
     
-    const handleSelectService = (service: HotelService) => { /* ... unchanged ... */ };
-    const handleEditService = (selected: SelectedServicePayload) => { /* ... unchanged ... */ };
-    const handleSaveServiceDetails = (details: Record<string, any>) => { /* ... unchanged ... */ };
+    const handleSelectService = useCallback((servicePayload: SelectedServicePayload) => {
+        setSelectedServices(prev => [...prev.filter(s => s.id !== servicePayload.id), servicePayload]);
+    }, []);
+
+    const handleRemoveService = useCallback((serviceId: number) => {
+        setSelectedServices(prev => prev.filter(s => s.id !== serviceId));
+    }, []);
+    
+    const handleSaveServiceDetails = (details: Record<string, any>) => {
+        if (currentService) {
+            setSelectedServices(prev => prev.map(s => s.id === currentService.id ? { ...s, details } : s));
+        }
+        setIsModalOpen(false);
+        setCurrentService(null);
+    };
 
     const handleFinalSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -252,6 +324,11 @@ const CheckoutPage: React.FC = () => {
             setError('پذیرش قوانین و مقررات الزامی است.');
             return;
         }
+        if(guests.some(g => !g.first_name || !g.last_name || (!g.national_id && !g.is_foreign))) {
+            setError('لطفاً اطلاعات تمام میهمانان را به صورت کامل وارد کنید.');
+            return;
+        }
+
         const finalGuests = guests.map(g => ({ ...g, is_foreign: g.is_foreign || false })) as GuestPayload[];
         const payload: BookingPayload = {
             booking_rooms: cart.map(item => ({
@@ -279,7 +356,7 @@ const CheckoutPage: React.FC = () => {
                 let price = (serviceInfo.pricing_model === 'PERSON') ? serviceInfo.price * selected.quantity : serviceInfo.price;
                 return total + price;
             }, 0);
-        }, [selectedServices, availableServices]);
+        }, [selectedServices, availableServices, totalGuests]);
 
         const basePrice = useMemo(() => cart.reduce((total, item) => total + item.total_price, 0), [cart]);
         const extraOccupancyPrice = (bookingDetails?.total_price ?? basePrice) - basePrice;
@@ -313,8 +390,7 @@ const CheckoutPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 order-2 lg:order-1">
                     <form onSubmit={handleFinalSubmit}>
-                        <div className="p-6 bg-white rounded-xl shadow-lg border border-gray-100 mb-6">
-                          <h2 className="text-2xl font-bold mb-4">مدیریت اتاق‌ها و نفرات</h2>
+                        <AccordionSection title="۱. مدیریت اتاق‌ها و نفرات" isOpen={isOccupancyOpen} onToggle={() => setOccupancyOpen(!isOccupancyOpen)}>
                           {cart.map(item => (
                             <RoomOccupancyManager 
                               key={item.id}
@@ -323,16 +399,10 @@ const CheckoutPage: React.FC = () => {
                               onOccupancyChange={handleOccupancyChange}
                             />
                           ))}
-                        </div>
-
-                        {!isLoadingServices && availableServices && availableServices.length > 0 && (
-                            <div className="mb-6">
-                                <ServicesStep services={availableServices} selectedServices={selectedServices} onSelectService={handleSelectService} onEditService={handleEditService} />
-                            </div>
-                        )}
+                        </AccordionSection>
                         
                         <div className="p-6 bg-white rounded-xl shadow-lg border border-gray-100">
-                            <h2 className="text-2xl font-bold mb-4">اطلاعات میهمانان</h2>
+                            <h2 className="text-2xl font-bold mb-4">۲. اطلاعات میهمانان</h2>
                             <p className="text-sm text-gray-500 mb-4 p-3 bg-blue-50 rounded-md flex items-center"><Info className="ml-2 w-5 h-5 text-blue-500"/>اطلاعات نفر اول به عنوان سرپرست رزرو در نظر گرفته می‌شود.</p>
                             
                             {guests.length > 0 && (
@@ -365,6 +435,15 @@ const CheckoutPage: React.FC = () => {
                     </form>
                 </div>
                 <div className="lg:col-span-1 order-1 lg:order-2">
+                    {!isLoadingServices && availableServices && availableServices.length > 0 && totalGuests > 0 && (
+                        <ServicesStep 
+                            services={availableServices} 
+                            selectedServices={selectedServices} 
+                            onSelectService={handleSelectService} 
+                            onRemoveService={handleRemoveService}
+                            totalGuests={totalGuests}
+                        />
+                    )}
                     <CheckoutSummary />
                 </div>
             </div>
@@ -377,4 +456,3 @@ const CheckoutPage: React.FC = () => {
 };
 
 export default CheckoutPage;
-// end modify
