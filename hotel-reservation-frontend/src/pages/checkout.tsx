@@ -320,16 +320,30 @@ const CheckoutPage: React.FC = () => {
     const handleFinalSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
         if (!rulesAccepted) {
             setError('پذیرش قوانین و مقررات الزامی است.');
             return;
         }
-        if(guests.some(g => !g.first_name || !g.last_name || (!g.national_id && !g.is_foreign))) {
-            setError('لطفاً اطلاعات تمام میهمانان را به صورت کامل وارد کنید.');
+
+        // --- CORRECTED VALIDATION LOGIC ---
+        // 1. Validate the principal guest (first guest)
+        const principalGuest = guests[0];
+        if (!principalGuest || !principalGuest.first_name || !principalGuest.last_name || (!principalGuest.national_id && !principalGuest.passport_number)) {
+            setError('لطفاً اطلاعات سرپرست رزرو (نفر اول) را به صورت کامل وارد کنید.');
             return;
         }
 
-        const finalGuests = guests.map(g => ({ ...g, is_foreign: g.is_foreign || false })) as GuestPayload[];
+        // 2. Filter out other guests who have not been filled out
+        const otherGuests = guests.slice(1).filter(g => g.first_name && g.last_name);
+        
+        // 3. Combine principal guest with filled-out other guests
+        const finalGuests = [principalGuest, ...otherGuests].map(g => ({
+            ...g,
+            is_foreign: g.is_foreign || false
+        })) as GuestPayload[];
+
+
         const payload: BookingPayload = {
             booking_rooms: cart.map(item => ({
                 room_type_id: item.room.id,
@@ -344,6 +358,7 @@ const CheckoutPage: React.FC = () => {
             rules_accepted: rulesAccepted,
             selected_services: selectedServices,
         };
+
         setLoading(true);
         mutation.mutate(payload);
     };

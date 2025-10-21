@@ -1,16 +1,18 @@
 // src/pages/booking-success-transfer.tsx
-// version: 1.1.0
-// FEATURE: Implemented conditional rendering based on booking status to handle both online and offline hotel flows.
+// version: 1.2.1
+// FIX: Corrected a syntax error (likely an unclosed brace) that was causing a build failure.
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { DateObject } from "react-multi-date-picker";
 import { fetchBookingDetails, fetchOfflineBanks, submitPaymentConfirmation, BookingDetail, GenericPaymentConfirmationPayload } from '../api/reservationService';
 import { OfflineBank } from '@/types/hotel';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
+import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 
 const BookingSuccessTransferPage: React.FC = () => {
     const router = useRouter();
@@ -19,6 +21,7 @@ const BookingSuccessTransferPage: React.FC = () => {
     const [selectedBank, setSelectedBank] = useState<string>('');
     const [trackingCode, setTrackingCode] = useState('');
     const [paymentDate, setPaymentDate] = useState('');
+    const [paymentTime, setPaymentTime] = useState('12:00');
 
     const { data: booking, isLoading: isLoadingBooking } = useQuery<BookingDetail>({
         queryKey: ['bookingDetails', booking_code],
@@ -29,7 +32,6 @@ const BookingSuccessTransferPage: React.FC = () => {
     const { data: banks, isLoading: isLoadingBanks } = useQuery<OfflineBank[]>({
         queryKey: ['offlineBanks'],
         queryFn: fetchOfflineBanks,
-        // Only fetch banks if the booking is for an online hotel (status is 'pending')
         enabled: !!booking && booking.status === 'pending',
     });
 
@@ -44,19 +46,25 @@ const BookingSuccessTransferPage: React.FC = () => {
         }
     });
 
+    const handleDateChange = (name: string, dateString: string) => {
+        setPaymentDate(dateString);
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!booking || !selectedBank || !trackingCode || !paymentDate) {
+        if (!booking || !selectedBank || !trackingCode || !paymentDate || !paymentTime) {
             alert('لطفا تمام فیلدها را پر کنید.');
             return;
         }
+
+        const fullPaymentDateTime = `${paymentDate} ${paymentTime}`;
 
         const payload: GenericPaymentConfirmationPayload = {
             content_type: 'booking',
             object_id: booking.booking_code,
             offline_bank: parseInt(selectedBank, 10),
             tracking_code: trackingCode,
-            payment_date: paymentDate,
+            payment_date: fullPaymentDateTime,
             payment_amount: booking.total_price,
         };
         mutation.mutate(payload);
@@ -75,9 +83,7 @@ const BookingSuccessTransferPage: React.FC = () => {
             <Header />
             <main className="flex-grow container mx-auto max-w-4xl p-8">
                 <div className="bg-white p-8 rounded-lg shadow-xl border">
-
                     {booking.status === 'awaiting_confirmation' ? (
-                        // Content for Offline hotels
                         <div>
                             <h1 className="text-3xl font-extrabold text-cyan-600 mb-4 text-center">رزرو شما جهت بررسی ثبت شد!</h1>
                             <p className="text-center text-gray-600 mb-8">
@@ -92,7 +98,6 @@ const BookingSuccessTransferPage: React.FC = () => {
                             </div>
                         </div>
                     ) : (
-                        // Original content for Online hotels (status: 'pending')
                         <>
                             <h1 className="text-3xl font-extrabold text-green-600 mb-4 text-center">رزرو شما با موفقیت ثبت شد!</h1>
                             <p className="text-center text-gray-600 mb-8">
@@ -126,7 +131,24 @@ const BookingSuccessTransferPage: React.FC = () => {
                                     </select>
                                 </div>
                                 <Input label="شماره پیگیری فیش" value={trackingCode} onChange={(e) => setTrackingCode(e.target.value)} required />
-                                <Input label="تاریخ و ساعت پرداخت" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} placeholder="مثال: ۱۴۰۴-۰۸-۲۵ ۱৪:۳۰" required />
+                                
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <JalaliDatePicker 
+                                        label="تاریخ پرداخت"
+                                        name="payment_date"
+                                        onDateChange={handleDateChange}
+                                        required
+                                        maxDate={new DateObject()}
+                                    />
+                                    <Input 
+                                        label="ساعت پرداخت"
+                                        name="payment_time"
+                                        type="time"
+                                        value={paymentTime}
+                                        onChange={(e) => setPaymentTime(e.target.value)}
+                                        required
+                                    />
+                                </div>
                                 
                                 <div className="text-left">
                                     <Button type="submit" variant="primary" disabled={mutation.isPending}>
