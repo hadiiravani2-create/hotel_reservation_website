@@ -351,18 +351,22 @@ const CheckoutPage: React.FC = () => {
                 quantity: item.quantity,
                 adults: item.room.base_capacity + (occupancyDetails[item.id]?.extra_adults || 0),
                 children: occupancyDetails[item.id]?.children || 0,
+                extra_requests: null, // UI does not collect this, so pass null.
             })),
             check_in: checkIn,
             check_out: checkOut,
             guests: finalGuests,
             rules_accepted: rulesAccepted,
             selected_services: selectedServices,
+	    agency_id: (isAuthenticated && user?.agency_id)
+                            ? user.agency_id
+                            : null,
+	    
         };
 
         setLoading(true);
         mutation.mutate(payload);
-    };
-    
+    };   
     const CheckoutSummary = () => {
         const totalServicesPrice = useMemo(() => {
             return selectedServices.reduce((total, selected) => {

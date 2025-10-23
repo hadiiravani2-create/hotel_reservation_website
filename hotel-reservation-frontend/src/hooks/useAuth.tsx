@@ -14,6 +14,7 @@ export interface AuthUser {
   username: string;
   // Based on core/serializers.py UserAuthSerializer structure
   agency_role: { id: number; name: string } | null; 
+  agency_id: number | null;
 }
 
 // Interface for the context state
