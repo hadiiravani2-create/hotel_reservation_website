@@ -162,3 +162,4 @@ export const submitBookingRequest = async (booking_code: string, request_type: '
   const response = await api.post('/reservations/booking-request/', { booking_code, request_type });
   return response.data;
 };
+

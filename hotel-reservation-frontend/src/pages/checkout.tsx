@@ -289,9 +289,44 @@ const CheckoutPage: React.FC = () => {
             }
         },
         onError: (error: any) => {
-            setError(error.response?.data?.error || 'خطا در ثبت رزرو. لطفاً مجدداً تلاش کنید.');
+            console.error("Booking Error Response Data:", error.response?.data); // Log full error data
+            let errorMessage = 'خطا در ثبت رزرو. لطفاً مجدداً تلاش کنید.';
+            const errorData = error.response?.data;
+
+            if (errorData) {
+                // If data is a string (simple error message)
+                if (typeof errorData === 'string') {
+                    errorMessage = errorData;
+                }
+                // If data has a specific 'error' key (common pattern)
+                else if (errorData.error) {
+                     errorMessage = errorData.error;
+                }
+                // If data is an object of field errors (DRF default)
+                else if (typeof errorData === 'object') {
+                     try {
+                         // --- START MODIFICATION ---
+                         // Try to format field errors, specifically handling nested booking_rooms error
+                         const fieldErrors = Object.entries(errorData)
+                             .map(([field, errors]) => {
+                                 // If it's the booking_rooms error and it's an object/array, stringify it directly
+                                 if (field === 'booking_rooms' && typeof errors === 'object' && errors !== null) {
+                                     return `${field}: ${JSON.stringify(errors, null, 2)}`; // Pretty print the error object/array
+                                 }
+
+                                 // Original formatting for other simple field errors
+                                 const messages = Array.isArray(errors) ? errors.join(', ') : String(errors);
+                                 return `${field}: ${messages}`;
+                             })
+                             .join(' | ');
+                         // --- END MODIFICATION ---
+                         if (fieldErrors) errorMessage = fieldErrors;
+                     } catch (e) { console.error("Error formatting validation errors:", e); }
+                }
+            }
+            setError(errorMessage);
         },
-        onSettled: () => setLoading(false),
+ 	onSettled: () => setLoading(false),
     });
 
     const handleOccupancyChange = useCallback((cartItemId: string, newOccupancy: OccupancyDetail) => {
