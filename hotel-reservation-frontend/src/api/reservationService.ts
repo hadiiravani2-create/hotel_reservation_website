@@ -1,11 +1,12 @@
 // src/api/reservationService.ts
-// version: 1.2.6
-// REFACTOR: Removed local OfflineBank interface, which is now imported from the central types file.
+// version: 1.2.7
+// FIX: Updated BookingPayload interface to send 'extra_adults' and 'children_count'
+//      to align with backend pricing logic and fix 400 error.
 
 import api from './coreService';
 import moment from 'moment-jalaali';
 import { BookedServiceDetail, BookingResponse, OfflineBank, SelectedServicePayload } from '@/types/hotel';
-// ... (GuestPayload, BookingPayload, BookingResponse interfaces remain unchanged)
+
 export interface GuestPayload {
   first_name: string;
   last_name: string;
@@ -22,8 +23,8 @@ export interface BookingPayload {
   booking_rooms: Array<{
     room_type_id: number;
     quantity: number;
-    adults: number;
-    children: number;
+    extra_adults: number; // <-- FIX: Changed from 'adults'
+    children_count: number; // <-- FIX: Changed from 'children'
     board_type_id: number;
     extra_requests?: string | null;
   }>;

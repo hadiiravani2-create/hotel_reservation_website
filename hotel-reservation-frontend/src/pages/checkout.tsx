@@ -1,6 +1,7 @@
 // src/pages/checkout.tsx
-// version: 4.2.0
-// REFACTOR: Moved ServicesStep to the sidebar and implemented new interaction logic and UI.
+// version: 4.2.1
+// FIX: Modified handleFinalSubmit to send 'extra_adults' and 'children_count'
+//      to match the pricing query payload and fix backend 400 error.
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
@@ -344,13 +345,14 @@ const CheckoutPage: React.FC = () => {
         })) as GuestPayload[];
 
 
+        // --- FIX: Aligned payload with pricing logic ---
         const payload: BookingPayload = {
             booking_rooms: cart.map(item => ({
                 room_type_id: item.room.id,
                 board_type_id: item.selected_board.id,
                 quantity: item.quantity,
-                adults: item.room.base_capacity + (occupancyDetails[item.id]?.extra_adults || 0),
-                children: occupancyDetails[item.id]?.children || 0,
+                extra_adults: occupancyDetails[item.id]?.extra_adults || 0, // <-- FIX: Send 'extra_adults'
+                children_count: occupancyDetails[item.id]?.children || 0, // <-- FIX: Send 'children_count'
                 extra_requests: null, // UI does not collect this, so pass null.
             })),
             check_in: checkIn,
