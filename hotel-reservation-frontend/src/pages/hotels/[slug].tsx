@@ -10,7 +10,7 @@ import { ParsedUrlQuery } from 'querystring';
 
 // --- API and Type Imports ---
 import { getHotelDetails, HotelDetails } from '@/api/pricingService';
-import { AvailableRoom, CartItem } from '@/types/hotel';
+import { AvailableRoom, CartItem, CancellationPolicy, CancellationRule } from '@/types/hotel';
 
 // --- Component Imports ---
 import Header from '@/components/Header';
@@ -18,7 +18,7 @@ import Footer from '@/components/Footer';
 import BookingWidget from '@/components/BookingWidget';
 import RoomCard from '@/components/RoomCard';
 import { useAuth } from '@/hooks/useAuth';
-import { Star, Clock, LogIn, LogOut } from 'lucide-react';
+import { Star, Clock, LogIn, LogOut, Info, AlertTriangle } from 'lucide-react';
 
 // --- Helper Functions and Components ---
 const toPersianDigits = (str: string | number | undefined | null) => {
@@ -33,6 +33,72 @@ const StarRating = ({ count }: { count: number }) => (
     ))}
   </div>
 );
+
+// --- Assuming ReadMore component exists ---
+const ReadMore = ({ text, maxLength }: { text: string; maxLength: number }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  if (!text) return null;
+  const needsReadMore = text.length > maxLength;
+
+  return (
+    <div className="text-sm text-gray-600">
+      {isExpanded || !needsReadMore ? text : `${text.substring(0, maxLength)}...`}
+      {needsReadMore && (
+        <button 
+          onClick={() => setIsExpanded(!isExpanded)} 
+          className="text-blue-600 hover:underline ml-1"
+        >
+          {isExpanded ? 'کمتر' : 'بیشتر'}
+        </button>
+      )}
+    </div>
+  );
+};
+
+// --- START: New Helper Component for Cancellation Policy ---
+interface CancellationPolicyProps {
+  policy: CancellationPolicy;
+  title: string;
+}
+
+const CancellationPolicyDisplay: React.FC<CancellationPolicyProps> = ({ policy, title }) => {
+  
+  const translatePenaltyType = (type: string): string => {
+    switch (type) {
+      case 'PERCENT_TOTAL': return 'درصد از کل مبلغ رزرو';
+      case 'PERCENT_FIRST_NIGHT': return 'درصد از هزینه شب اول';
+      case 'FIXED_NIGHTS': return 'شب اقامت';
+      default: return type;
+    }
+  };
+
+  const formatRule = (rule: CancellationRule): string => {
+    const value = rule.penalty_type === 'FIXED_NIGHTS' ? Math.floor(rule.penalty_value) : rule.penalty_value;
+    const daysText = rule.days_before_checkin_min === rule.days_before_checkin_max
+      ? `${toPersianDigits(rule.days_before_checkin_min)} روز`
+      : `از ${toPersianDigits(rule.days_before_checkin_min)} تا ${toPersianDigits(rule.days_before_checkin_max)} روز`;
+      
+    return `${daysText} قبل از ورود: جریمه معادل ${toPersianDigits(value)} ${translatePenaltyType(rule.penalty_type)}`;
+  };
+
+  return (
+    <div className="flex items-start mb-4"> {/* Added margin-bottom */}
+      <AlertTriangle className="w-5 h-5 text-orange-600 mt-1 mr-2 flex-shrink-0" />
+      <div>
+        <h3 className="font-semibold text-gray-700 mb-1">{title} ({policy.name})</h3>
+        {policy.rules && policy.rules.length > 0 ? (
+          <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+            {policy.rules.sort((a,b) => a.days_before_checkin_min - b.days_before_checkin_min).map((rule) => (
+              <li key={rule.id}>{formatRule(rule)}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-gray-500">قوانین مشخصی تعریف نشده است.</p>
+        )}
+      </div>
+    </div>
+  );
+};
 
 interface HotelPageProps {
   hotel: HotelDetails;
@@ -162,13 +228,6 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
                   {isDescriptionExpanded ? 'بستن' : 'بیشتر بخوانید...'}
                 </button>
               </div>
-
-              {hotel.policies && (
-                <div className="bg-white p-6 rounded-lg shadow-md mb-8 border">
-                  <h2 className="text-2xl font-bold mb-4">قوانین هتل</h2>
-                  <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">{hotel.policies}</div>
-                </div>
-              )}
 
               <section id="rooms-section">
                   <h2 className="text-3xl font-bold mb-6 border-b pb-3">انتخاب اتاق</h2>

@@ -3,7 +3,7 @@
 // FIX: Corrected API paths for hotel services to match the new standardized /api/hotels/ prefix.
 
 import api from './coreService';
-import { AvailableRoom } from '@/types/hotel'; 
+import { AvailableRoom, CancellationPolicy } from '@/types/hotel'; 
 
 // --- START: HotelDetails Interface (Unchanged) ---
 export interface HotelDetails {
@@ -18,11 +18,12 @@ export interface HotelDetails {
     latitude: string;
     longitude: string;
     is_online: boolean;
-    policies: string | null;
     rules: string | null;
     check_in_time: string | null;
     check_out_time: string | null;
-    available_rooms: AvailableRoom[]; 
+    available_rooms: AvailableRoom[];
+    cancellation_policy_normal: CancellationPolicy | null;
+    cancellation_policy_peak: CancellationPolicy | null;
 }
 // --- END: HotelDetails Interface ---
 

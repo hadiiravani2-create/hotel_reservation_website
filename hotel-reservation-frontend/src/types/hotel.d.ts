@@ -36,7 +36,32 @@ export interface Wallet {
   recent_transactions: WalletTransaction[];
 }
 
-// ... (rest of the interfaces remain unchanged)
+/**
+ * Represents a single cancellation rule.
+ * Based on cancellations.serializers.CancellationRuleSerializer
+ */
+export interface CancellationRule {
+  id: number;
+  days_before_checkin_min: number;
+  days_before_checkin_max: number;
+  // 'PERCENT_TOTAL' | 'PERCENT_FIRST_NIGHT' | 'FIXED_NIGHTS'
+  penalty_type: string; 
+  penalty_value: number; // Decimal/string representation of the value
+}
+
+/**
+ * Represents a full cancellation policy (template).
+ * Based on cancellations.serializers.CancellationPolicySerializer
+ */
+export interface CancellationPolicy {
+  id: number;
+  name: string;
+  description: string | null;
+  rules: CancellationRule[];
+}
+
+
+
 /**
  * Represents a suggested hotel object returned by the API for the homepage.
  * Based on hotels.serializers.SuggestedHotelSerializer
