@@ -3,14 +3,13 @@
 // FIX: Corrected JSX parsing error by refactoring conditional rendering logic for buttons.
 // FIX: Corrected syntax error by adding a missing comma in the statusMap object.
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import moment from 'moment-jalaali';
-import { FaCalendarAlt, FaHotel, FaMoneyBillAlt, FaTimesCircle, FaEdit, FaInfoCircle } from 'react-icons/fa';
-
+import { FaCalendarAlt, FaHotel, FaMoneyBillAlt, FaTimesCircle, FaEdit, FaInfoCircle, FaFilePdf } from 'react-icons/fa';
 import { Button } from '@/components/ui/Button';
-import { fetchMyBookings, BookingListItem, BookingStatus, submitBookingRequest } from '@/api/reservationService';
+import { fetchMyBookings, BookingListItem, BookingStatus, submitBookingRequest, downloadMyBookingPDF } from '@/api/reservationService';
 
 moment.locale('fa');
 
@@ -26,6 +25,7 @@ const statusMap: Record<BookingStatus, { label: string; color: string }> = {
 
 const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> = ({ booking, onAction }) => {
   const router = useRouter();
+  const [isDownloading, setIsDownloading] = useState(false);
   const { label, color } = statusMap[booking.status] || { label: 'نامشخص', color: 'text-gray-500 bg-gray-100' };
 
   const handleAction = useCallback(async (request_type: 'cancellation' | 'modification') => {
@@ -39,6 +39,35 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
       console.error('Booking action failed:', error);
     }
   }, [booking.booking_code, onAction]);
+  // Handler for the PDF download
+  const handleDownloadPDF = async () => {
+    setIsDownloading(true);
+    try {
+      const pdfBlob = await downloadMyBookingPDF(booking.booking_code);
+
+      // Create a temporary URL for the blob
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `booking_${booking.booking_code}.pdf`);
+
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+
+      // Clean up
+      setTimeout(() => {
+        link.parentNode?.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+
+    } catch (error) {
+      alert('خطا در دانلود فایل PDF.');
+      console.error('PDF download failed:', error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   return (
     <div className="bg-white p-6 shadow-lg rounded-xl border border-gray-100 hover:shadow-xl transition duration-300 mb-6">
@@ -98,7 +127,21 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
                 مشاهده جزئیات
             </Button>
         )}
-        
+
+	{booking.status === 'confirmed' && (
+          <Button
+            onClick={handleDownloadPDF}
+            variant="success" // Assuming you have a 'success' variant (green)
+            size="sm"
+            className="flex items-center"
+            disabled={isDownloading}
+          >
+            <FaFilePdf className="ml-1" />
+            {isDownloading ? 'در حال آماده‌سازی...' : 'دانلود کانفرم'}
+          </Button>
+        )}
+       
+
         {(booking.status === 'confirmed' || booking.status === 'pending') && (
             <Button onClick={() => handleAction('cancellation')} variant="danger" size="sm" className="flex items-center">
                 <FaTimesCircle className="ml-1" />

@@ -4,7 +4,7 @@
 
 import React from 'react';
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'link' | 'outline';
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'link' | 'outline' | 'success' ;
 type ButtonSize = 'default' | 'sm' | 'icon'; // NEW: Added size type
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -41,6 +41,9 @@ const getBaseStyles = (variant: ButtonVariant) => {
       break;
     case 'danger':
       baseClasses += " text-white bg-red-600 hover:bg-red-700 focus:ring-red-500";
+      break;
+    case 'success':
+      baseClasses += " text-white bg-green-600 hover:bg-green-700 focus:ring-green-500";
       break;
     case 'link':
       baseClasses += " text-primary-brand bg-transparent hover:underline shadow-none focus:ring-transparent focus:ring-offset-0";

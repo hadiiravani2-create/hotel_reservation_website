@@ -163,3 +163,44 @@ export const submitBookingRequest = async (booking_code: string, request_type: '
   return response.data;
 };
 
+
+// --- NEW PDF DOWNLOAD FUNCTIONS ---
+
+/**
+ * Downloads the booking confirmation PDF for an AUTHENTICATED user.
+ * (Calls the GET endpoint defined in the backend)
+ * @param booking_code The unique code of the booking.
+ * @returns A Promise that resolves to a Blob (the PDF file).
+ */
+export const downloadMyBookingPDF = async (booking_code: string): Promise<Blob> => {
+  const response = await api.get(
+    `/reservations/bookings/${booking_code}/pdf/`,
+    {
+      // Crucial: Tell axios to expect binary data (a file/blob)
+      responseType: 'blob',
+    }
+  );
+  return response.data;
+};
+
+/**
+ * Downloads the booking confirmation PDF for a GUEST user.
+ * (Calls the POST endpoint defined in the backend)
+ * @param booking_code The unique code of the booking.
+ * @param guest_id_code The guest's National ID or Passport Number for verification.
+ * @returns A Promise that resolves to a Blob (the PDF file).
+ */
+export const downloadGuestBookingPDF = async (
+  booking_code: string,
+  guest_id_code: string
+): Promise<Blob> => {
+  const response = await api.post(
+    `/reservations/bookings/${booking_code}/pdf/`,
+    { guest_id_code }, // Pass the guest's ID in the body for verification
+    {
+      // Crucial: Tell axios to expect binary data (a file/blob)
+      responseType: 'blob',
+    }
+  );
+  return response.data;
+};
