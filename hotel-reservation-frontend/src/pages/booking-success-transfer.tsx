@@ -30,9 +30,12 @@ const BookingSuccessTransferPage: React.FC = () => {
     });
 
     const { data: banks, isLoading: isLoadingBanks } = useQuery<OfflineBank[]>({
-        queryKey: ['offlineBanks'],
-        queryFn: fetchOfflineBanks,
-        enabled: !!booking && booking.status === 'pending',
+        // 1. Add hotel_id to the queryKey to ensure uniqueness
+        queryKey: ['offlineBanks', booking?.hotel_id], 
+        // 2. Pass the hotel_id (from the booking query) to the fetch function
+        queryFn: () => fetchOfflineBanks(booking!.hotel_id), 
+        // 3. Ensure query only runs when booking and hotel_id are available
+        enabled: !!booking && booking.status === 'pending' && !!booking.hotel_id, 
     });
 
     const mutation = useMutation({
@@ -113,6 +116,7 @@ const BookingSuccessTransferPage: React.FC = () => {
                                                 <p><strong>بانک:</strong> {bank.bank_name}</p>
                                                 <p><strong>صاحب حساب:</strong> {bank.account_holder}</p>
                                                 <p><strong>شماره کارت:</strong> <span className="font-mono">{bank.card_number}</span></p>
+						<p><strong>شماره شبا:</strong> <span className="font-mono" dir="ltr">{bank.shaba_number}</span></p>
                                             </li>
                                         ))}
                                     </ul>

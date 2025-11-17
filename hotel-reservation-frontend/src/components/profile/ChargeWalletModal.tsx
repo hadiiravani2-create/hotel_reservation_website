@@ -41,8 +41,11 @@ const ChargeWalletModal: React.FC<ChargeWalletModalProps> = ({ onClose, onSucces
   });
 
   const { data: offlineBanks, isLoading: isLoadingBanks } = useQuery<OfflineBank[]>({
-    queryKey: ['offlineBanks'],
-    queryFn: fetchOfflineBanks,
+    // Use a specific key for general banks (wallet)
+    queryKey: ['offlineBanks', 'general'], 
+    // Calling fetchOfflineBanks() without args is CORRECT for general accounts
+    // FIX: Wrap the function call in an arrow function
+    queryFn: () => fetchOfflineBanks(),
     enabled: step === 2,
   });
 

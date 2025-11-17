@@ -310,7 +310,7 @@ const CheckoutPage: React.FC = () => {
                          const fieldErrors = Object.entries(errorData)
                              .map(([field, errors]) => {
                                  // If it's the booking_rooms error and it's an object/array, stringify it directly
-                                 if (field === 'booking_rooms' && typeof errors === 'object' && errors !== null) {
+				 if ((field === 'booking_rooms' || field === 'guests') && typeof errors === 'object' && errors !== null) {	 
                                      return `${field}: ${JSON.stringify(errors, null, 2)}`; // Pretty print the error object/array
                                  }
 

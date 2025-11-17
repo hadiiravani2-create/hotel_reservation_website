@@ -63,6 +63,7 @@ export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'cancellatio
 export interface BookingDetail {
     booking_code: string;
     hotel_name: string;
+    hotel_id: number;
     check_in: string;
     check_out: string;
     total_price: number;
@@ -146,8 +147,13 @@ export const initiatePayment = async (booking_code: string): Promise<{ redirect_
 
 
 // fetchOfflineBanks function remains unchanged, but now its return type is imported
-export const fetchOfflineBanks = async (): Promise<OfflineBank[]> => {
-    const response = await api.get('/reservations/offline-banks/');
+export const fetchOfflineBanks = async (hotelId?: number): Promise<OfflineBank[]> => {
+    // Dynamically build the URL based on whether hotelId is provided
+    const url = hotelId 
+        ? `/reservations/offline-banks/?hotel_id=${hotelId}` 
+        : '/reservations/offline-banks/';
+        
+    const response = await api.get(url);
     return response.data;
 };
 

@@ -12,6 +12,7 @@ export interface OfflineBank {
     account_holder: string;
     account_number: string;
     card_number: string;
+    shaba_number: string;
 }
 
 /**
