@@ -1,6 +1,6 @@
 // src/components/BookingWidget.tsx
-// version: 1.0.3
-// FIX: Reverted 'defaultValue' prop back to 'value' for JalaliDatePicker to resolve TypeScript error.
+// version: 1.1.0
+// FIX: Updated JalaliDatePicker props to match the new controlled component interface (value, onChange).
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
@@ -92,13 +92,9 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
 
   const totalCartPrice = cartItems.reduce((total, item) => total + item.total_price, 0);
 
-  const handleDateChange = (name: string, dateString: string) => {
-    if (dateString) {
-      const newDate = new DateObject({ date: dateString, ...DATE_CONFIG });
-      setCheckIn(newDate);
-    } else {
-      setCheckIn(null);
-    }
+  // REFACTOR: Simplified handler to match new JalaliDatePicker signature
+  const handleDateChange = (date: DateObject | null) => {
+    setCheckIn(date);
   };
   
   return (
@@ -106,12 +102,13 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">تاریخ ورود</label>
+          {/* REFACTOR: Updated props to 'value' and 'onChange' */}
           <JalaliDatePicker
             label="تاریخ ورود"
             name="check_in"
-            initialValue={checkIn?.format("YYYY-MM-DD")}
-            onDateChange={handleDateChange}
-        />
+            value={checkIn}
+            onChange={handleDateChange}
+          />
         </div>
         <div>
           <label htmlFor="duration-select" className="block text-sm font-medium text-gray-700 mb-1">مدت اقامت (شب)</label>

@@ -1,11 +1,10 @@
 // src/components/profile/ChargeWalletModal.tsx
-// version: 1.0.2
-// FIX: Resolved 400 error by adding a time input and sending a full datetime string.
-// FEATURE: Disabled future dates in the date picker.
+// version: 1.1.0
+// FIX: Updated JalaliDatePicker implementation to use 'value' and 'onChange' (standardized props).
 
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { DateObject } from "react-multi-date-picker"; // Import DateObject
+import { DateObject } from "react-multi-date-picker";
 import { initiateWalletDeposit } from '@/api/coreService';
 import { fetchOfflineBanks, submitPaymentConfirmation, GenericPaymentConfirmationPayload } from '@/api/reservationService';
 import { OfflineBank } from '@/types/hotel';
@@ -26,7 +25,7 @@ const ChargeWalletModal: React.FC<ChargeWalletModalProps> = ({ onClose, onSucces
     offline_bank: '',
     tracking_code: '',
     payment_date: '',
-    payment_time: '12:00', // Add state for time
+    payment_time: '12:00',
   });
 
   const initiateMutation = useMutation({
@@ -41,10 +40,7 @@ const ChargeWalletModal: React.FC<ChargeWalletModalProps> = ({ onClose, onSucces
   });
 
   const { data: offlineBanks, isLoading: isLoadingBanks } = useQuery<OfflineBank[]>({
-    // Use a specific key for general banks (wallet)
     queryKey: ['offlineBanks', 'general'], 
-    // Calling fetchOfflineBanks() without args is CORRECT for general accounts
-    // FIX: Wrap the function call in an arrow function
     queryFn: () => fetchOfflineBanks(),
     enabled: step === 2,
   });
@@ -75,8 +71,13 @@ const ChargeWalletModal: React.FC<ChargeWalletModalProps> = ({ onClose, onSucces
     setConfirmationData({ ...confirmationData, [e.target.name]: e.target.value });
   };
 
-  const handleDateChange = (name: string, dateString: string) => {
-    setConfirmationData(prev => ({ ...prev, [name]: dateString }));
+  // REFACTOR: Updated handler signature to match new JalaliDatePicker
+  const handleDateChange = (date: DateObject | null) => {
+    if (date) {
+        setConfirmationData(prev => ({ ...prev, payment_date: date.format("YYYY-MM-DD") }));
+    } else {
+        setConfirmationData(prev => ({ ...prev, payment_date: "" }));
+    }
   };
   
   const handleConfirmSubmit = (e: React.FormEvent) => {
@@ -86,7 +87,6 @@ const ChargeWalletModal: React.FC<ChargeWalletModalProps> = ({ onClose, onSucces
       return;
     }
     
-    // Combine date and time into a single string for the backend
     const fullPaymentDateTime = `${confirmationData.payment_date} ${confirmationData.payment_time}:00`;
 
     const payload: GenericPaymentConfirmationPayload = {
@@ -107,6 +107,7 @@ const ChargeWalletModal: React.FC<ChargeWalletModalProps> = ({ onClose, onSucces
 
         {step === 1 && (
           <form onSubmit={handleInitiate}>
+             {/* ... Step 1 form content remains unchanged ... */}
             <Input
               label="مبلغ شارژ (تومان)"
               type="number"
@@ -150,12 +151,14 @@ const ChargeWalletModal: React.FC<ChargeWalletModalProps> = ({ onClose, onSucces
             <Input label="شماره پیگیری فیش" name="tracking_code" value={confirmationData.tracking_code} onChange={handleConfirmChange} required />
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* REFACTOR: Using 'value' and 'onChange' props */}
               <JalaliDatePicker 
                 label="تاریخ پرداخت"
                 name="payment_date"
-                onDateChange={handleDateChange}
+                value={confirmationData.payment_date}
+                onChange={handleDateChange}
                 required
-                maxDate={new DateObject()} // FEATURE: Disable future dates
+                maxDate={new DateObject()}
               />
               <Input 
                 label="ساعت پرداخت"
