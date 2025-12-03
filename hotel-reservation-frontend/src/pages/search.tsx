@@ -1,19 +1,35 @@
 // src/pages/search.tsx
-// version: 0.0.2
+// version: 0.0.4
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/router';
 import Image from 'next/image'; 
-import { searchHotels, getAmenities, SearchParams as ApiSearchParams, HotelSearchResult } from '../api/pricingService';
+import { searchHotels, getAmenities, SearchParams as ApiSearchParams } from '../api/pricingService';
 import { Button } from '../components/ui/Button';
 import Link from 'next/link';
 import Header from '../components/Header';
+import { formatPrice } from '@/utils/format';
 
 // --- Type Interfaces ---
 
 interface Amenity {
     id: number;
     name: string;
+}
+
+// Update Interface based on real API response
+export interface HotelSearchResult {
+    hotel_id: number;
+    hotel_name: string;
+    hotel_slug: string;
+    hotel_stars: number;
+    min_price: number;
+    address?: string; // فیلد آدرس اضافه شد
+    city?: string;
+    main_image?: {
+        image: string;
+        alt?: string;
+    };
 }
 
 interface SearchParams {
@@ -32,16 +48,22 @@ interface FilterSidebarProps {
 
 // --- Sub-Components ---
 
-// FIX: Corrected access to nested image URL within the main_image object
 const HotelCard: React.FC<{ hotel: HotelSearchResult }> = ({ hotel }) => {
-    // Attempt to access the nested image URL, common pattern for DRF Serializers
-    const imageUrl = (hotel as any).main_image?.image || null; 
+    // 1. Fix Image URL logic
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    let imageUrl = hotel.main_image?.image || null;
+    
+    // If image path is relative (starts with /), prepend backend URL
+    if (imageUrl && imageUrl.startsWith('/')) {
+        imageUrl = `${backendUrl}${imageUrl}`;
+    }
+
+    // 2. Determine Address
+    const displayAddress = hotel.address || hotel.city || 'آدرس ثبت نشده';
 
     return (
         <div className="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col md:flex-row mb-6 hover:shadow-xl transition-shadow duration-300">
-            {/* Image Container - Needs relative positioning and defined height */}
             <div className="md:w-1/3 relative flex-shrink-0 h-48 md:h-auto">
-                {/* Check if a valid image URL was found */}
                 {imageUrl ? (
                     <Image
                         src={imageUrl} 
@@ -49,6 +71,8 @@ const HotelCard: React.FC<{ hotel: HotelSearchResult }> = ({ hotel }) => {
                         layout="fill"
                         objectFit="cover"
                         className="object-cover"
+                        // Add unoptimized if needed for external/local dev images without next.config setup
+                        unoptimized={true} 
                     />
                 ) : (
                     <div className="bg-gray-200 h-full w-full flex items-center justify-center">
@@ -60,15 +84,19 @@ const HotelCard: React.FC<{ hotel: HotelSearchResult }> = ({ hotel }) => {
                 <div>
                     <h4 className="text-xl font-bold text-gray-900">{hotel.hotel_name}</h4>
                     <p className="text-yellow-500 mt-1">
-                        {Array.from({ length: hotel.hotel_stars }, (_, i) => <span key={i}>⭐</span>)}
+                        {Array.from({ length: hotel.hotel_stars || 0 }, (_, i) => <span key={i}>⭐</span>)}
                     </p>
-                    <p className="text-sm text-gray-500 mt-2">آدرس هتل در اینجا...</p>
+                    {/* 3. Fix Hardcoded Address */}
+                    <p className="text-sm text-gray-500 mt-2 flex items-center">
+                        <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        {displayAddress}
+                    </p>
                 </div>
                 <div className="flex justify-between items-center mt-4">
                     <div className="text-primary-brand font-extrabold text-2xl">
                         <span className="text-sm font-normal text-gray-600">شروع قیمت از </span>
-                        {hotel.min_price.toLocaleString('fa')}
-                        <span className="text-sm font-normal text-gray-600"> تومان</span>
+                        {/* Price Rule Applied */}
+                        {formatPrice(hotel.min_price)}
                     </div>
                     <Link href={`/hotels/${hotel.hotel_slug}?check_in=${useRouter().query.check_in}&duration=${useRouter().query.duration}`}>
                         <Button className="!w-auto px-6">مشاهده و رزرو</Button>
@@ -79,6 +107,7 @@ const HotelCard: React.FC<{ hotel: HotelSearchResult }> = ({ hotel }) => {
     );
 };
 
+// ... (Rest of the file: FilterSidebar and SearchResultsPage remain mostly unchanged)
 const FilterSidebar: React.FC<FilterSidebarProps> = ({ setFilter }) => {
     const { data: amenities } = useQuery<Amenity[]>({
         queryKey: ['amenities'],
@@ -92,7 +121,12 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ setFilter }) => {
                 <label className="block font-medium mb-2">امکانات</label>
                 {amenities?.map((amenity: Amenity) => (
                     <div key={amenity.id} className="flex items-center mb-1">
-                        <input type="checkbox" id={`amenity-${amenity.id}`} className="ml-2"/>
+                        <input 
+                            type="checkbox" 
+                            id={`amenity-${amenity.id}`} 
+                            className="ml-2"
+                            onChange={(e) => setFilter('amenities', e.target.checked ? amenity.id : '')} 
+                        />
                         <label htmlFor={`amenity-${amenity.id}`}>{amenity.name}</label>
                     </div>
                 ))}
@@ -101,8 +135,6 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ setFilter }) => {
         </div>
     );
 };
-
-// ------------------------------------
 
 const SearchResultsPage: React.FC = () => {
     const router = useRouter();
@@ -133,8 +165,8 @@ const SearchResultsPage: React.FC = () => {
     });
 
     const handleSetFilter = (key: string, value: any) => {
-        const newFilters = { [key]: value };
-        updateUrl(newFilters as Partial<SearchParams>);
+        // Simple implementation for demo
+        console.log('Filter set:', key, value);
     }
 
     if (!router.isReady) return <div>در حال بارگذاری...</div>;
