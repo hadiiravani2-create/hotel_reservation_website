@@ -142,7 +142,11 @@ export interface AvailableRoom {
   base_capacity: number;
   extra_capacity: number;
   child_capacity: number;
-  bed_type: string | null;
+
+  extra_adult_price?: number;
+  child_price?: number;
+  bed_type: string | null;i
+  bed_types?: BedType[];
   images: RoomImage[];
   amenities: Amenity[];
   priced_board_types: PricedBoardType[];
@@ -166,6 +170,8 @@ export interface CartItem {
     extra_capacity: number;
     child_capacity: number;
     hotel_id?: number; // Added to easily get hotel id
+    extra_adult_price?: number;
+    child_price?: number;
   };
   selected_board: {
     id: number;
@@ -174,6 +180,8 @@ export interface CartItem {
   quantity: number;
   price_per_room: number;
   total_price: number;
+  extra_adults: number;
+  children_count: number;
 }
 
 /**

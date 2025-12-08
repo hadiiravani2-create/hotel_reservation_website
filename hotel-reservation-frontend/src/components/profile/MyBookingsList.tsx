@@ -1,17 +1,22 @@
 // src/components/profile/MyBookingsList.tsx
 // version: 1.0.5
-// FIX: Corrected JSX parsing error by refactoring conditional rendering logic for buttons.
-// FIX: Corrected syntax error by adding a missing comma in the statusMap object.
 
 import React, { useCallback, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
-import moment from 'moment-jalaali';
+import { DateObject } from "react-multi-date-picker";
+import { DATE_CONFIG } from '@/config/date';
 import { FaCalendarAlt, FaHotel, FaMoneyBillAlt, FaTimesCircle, FaEdit, FaInfoCircle, FaFilePdf } from 'react-icons/fa';
 import { Button } from '@/components/ui/Button';
 import { fetchMyBookings, BookingListItem, BookingStatus, submitBookingRequest, downloadMyBookingPDF } from '@/api/reservationService';
 
-moment.locale('fa');
+const formatDate = (dateStr: string): string => {
+  if (!dateStr) return '-';
+  // Create DateObject, convert to Persian (Jalali) using config, and format
+  return new DateObject(dateStr)
+    .convert(DATE_CONFIG.calendar, DATE_CONFIG.locale)
+    .format("YYYY/MM/DD");
+};
 
 const statusMap: Record<BookingStatus, { label: string; color: string }> = {
   pending: { label: 'در انتظار پرداخت', color: 'text-yellow-600 bg-yellow-100' },
@@ -90,14 +95,14 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
             <span className="font-medium text-gray-800">تاریخ ورود:</span>
             <div className="flex items-center mt-1">
                 <FaCalendarAlt className="ml-1 text-gray-400" />
-                <span>{moment(booking.check_in, 'YYYY-MM-DD').format('jD jMMMM jYYYY')}</span>
+                <span>{formatDate(booking.check_in)}</span>
             </div>
         </div>
         <div className='flex flex-col'>
             <span className="font-medium text-gray-800">تاریخ خروج:</span>
             <div className="flex items-center mt-1">
                 <FaCalendarAlt className="ml-1 text-gray-400" />
-                <span>{moment(booking.check_out, 'YYYY-MM-DD').format('jD jMMMM jYYYY')}</span>
+                <span>{formatDate(booking.check_out)}</span>
             </div>
         </div>
         <div className='flex flex-col'>

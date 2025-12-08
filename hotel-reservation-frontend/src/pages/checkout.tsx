@@ -1,7 +1,7 @@
 // src/pages/checkout.tsx
-// version: 4.2.1
-// FIX: Modified handleFinalSubmit to send 'extra_adults' and 'children_count'
-//      to match the pricing query payload and fix backend 400 error.
+// version: 5.0.0
+// REFACTOR: Removed editable occupancy logic. Now uses CartItem data from previous step as the single source of truth.
+// FIX: Guests count, Pricing, and Payload are strictly derived from the Cart state.
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
@@ -17,29 +17,58 @@ import { Button } from '../components/ui/Button';
 import GuestInputForm from '../components/GuestInputForm';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-// ServicesStep is now redesigned and used differently
 import ServiceDetailsModal from '../components/checkout/ServiceDetailsModal';
 
 // Icons
-import { Info, Plus, Minus, ChevronDown } from 'lucide-react';
+import { Info, ChevronDown, Users, CheckCircle } from 'lucide-react';
 import { DateObject } from "react-multi-date-picker";
 import { DATE_CONFIG } from '@/config/date';
+import { formatPrice, toPersianDigits } from '@/utils/format';
 
-const toPersianDigits = (str: string | number | undefined | null) => {
-    if (str === undefined || str === null) return '';
-    const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-    return String(str).replace(/[0-9]/g, (d) => persianDigits[parseInt(d)]);
+// --- Sub-components ---
+
+// 1. Read-Only Room Summary Item (Replaces RoomOccupancyManager)
+const RoomSummaryItem: React.FC<{ item: CartItem }> = ({ item }) => {
+  return (
+    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 mb-3 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors hover:border-blue-200">
+      <div>
+        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+            {item.room.name}
+            <span className="text-xs font-normal bg-white px-2 py-1 rounded border text-gray-600">
+                {toPersianDigits(item.quantity)} اتاق
+            </span>
+        </h3>
+        <p className="text-sm text-gray-500 mt-1">
+            سرویس: <span className="font-medium text-gray-700">{item.selected_board.name}</span>
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+          <div className="px-3 py-1 bg-blue-50 text-blue-700 rounded-md flex items-center gap-1 border border-blue-100">
+              <Users className="w-4 h-4" />
+              <span>ظرفیت پایه: {toPersianDigits(item.room.base_capacity)}</span>
+          </div>
+          
+          {(item.extra_adults > 0 || item.children_count > 0) && (
+              <div className="flex gap-2">
+                  {item.extra_adults > 0 && (
+                      <span className="px-2 py-1 bg-green-50 text-green-700 rounded-md border border-green-100 font-medium">
+                          +{toPersianDigits(item.extra_adults)} نفر اضافه
+                      </span>
+                  )}
+                  {item.children_count > 0 && (
+                      <span className="px-2 py-1 bg-pink-50 text-pink-700 rounded-md border border-pink-100 font-medium">
+                          +{toPersianDigits(item.children_count)} کودک
+                      </span>
+                  )}
+              </div>
+          )}
+      </div>
+    </div>
+  );
 };
 
-// A type to hold the occupancy details for each cart item
-type OccupancyDetail = {
-  extra_adults: number;
-  children: number;
-};
-
-// --- start modify ---
-
-// Redesigned ServicesStep component for the sidebar
+// 2. Services Selection Component
 interface ServicesStepProps {
   services: HotelService[];
   selectedServices: SelectedServicePayload[];
@@ -60,33 +89,39 @@ const ServicesStep: React.FC<ServicesStepProps> = ({ services, selectedServices,
     onSelectService({ id: service.id, quantity, details: {} });
   };
   
-  const servicesToShow = isExpanded ? services : services.slice(0, 1);
+  const servicesToShow = isExpanded ? services : services.slice(0, 2);
 
   return (
-    <div className="p-4 bg-white rounded-xl shadow-lg border border-gray-100 mb-6">
-      <h3 className="text-lg font-bold mb-3">خدمات اضافی</h3>
+    <div className="p-5 bg-white rounded-xl shadow-lg border border-gray-100 mb-6">
+      <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+          <span className="w-1 h-6 bg-primary-brand rounded-full"></span>
+          خدمات اضافی (اختیاری)
+      </h3>
       <div className="space-y-3">
         {servicesToShow.map(service => (
-          <div key={service.id} className="flex justify-between items-center text-sm">
-            <span className="font-semibold text-gray-700 flex-1">{service.name}</span>
-            <span className="text-gray-600 mx-2">
-              {service.price > 0 ? `${toPersianDigits(service.price.toLocaleString())} ت` : 'رایگان'}
-              {service.pricing_model === 'PERSON' && <span className="text-xs"> (هر نفر)</span>}
-            </span>
+          <div key={service.id} className="flex justify-between items-center text-sm p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
+            <div className="flex flex-col">
+                <span className="font-semibold text-gray-800">{service.name}</span>
+                <span className="text-gray-500 text-xs mt-0.5">
+                    {service.price > 0 ? `${formatPrice(service.price)} ریال` : 'رایگان'}
+                    {service.pricing_model === 'PERSON' && ' (هر نفر)'}
+                </span>
+            </div>
+            
             {isSelected(service.id) ? (
-              <Button onClick={() => onRemoveService(service.id)} variant="danger" size="sm" className="w-auto px-2 py-1 text-xs">
+              <Button onClick={() => onRemoveService(service.id)} variant="danger" size="sm" className="h-8 text-xs px-3">
                 حذف
               </Button>
             ) : (
-              <Button onClick={() => handleSelect(service)} variant="outline" size="sm" className="w-auto px-2 py-1 text-xs">
+              <Button onClick={() => handleSelect(service)} variant="outline" size="sm" className="h-8 text-xs px-3 border-blue-200 text-blue-600 hover:bg-blue-50">
                 افزودن
               </Button>
             )}
           </div>
         ))}
-        {services.length > 1 && (
-            <button onClick={() => setIsExpanded(!isExpanded)} className="text-blue-600 text-sm font-semibold w-full flex items-center justify-center pt-2">
-                {isExpanded ? 'نمایش کمتر' : `نمایش سایر خدمات (${toPersianDigits(services.length - 1)})`}
+        {services.length > 2 && (
+            <button onClick={() => setIsExpanded(!isExpanded)} className="text-primary-brand text-sm font-medium w-full flex items-center justify-center pt-3 mt-2 border-t border-dashed border-gray-200 hover:text-blue-700 transition-colors">
+                {isExpanded ? 'بستن لیست' : `مشاهده ${toPersianDigits(services.length - 2)} خدمت دیگر`}
                 <ChevronDown className={`w-4 h-4 mr-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
             </button>
         )}
@@ -95,119 +130,33 @@ const ServicesStep: React.FC<ServicesStepProps> = ({ services, selectedServices,
   );
 };
 
-
-// Helper component for managing occupancy of a single room type from the cart
-interface RoomOccupancyManagerProps {
-  item: CartItem;
-  occupancy: OccupancyDetail;
-  onOccupancyChange: (cartItemId: string, newOccupancy: OccupancyDetail) => void;
-}
-
-const RoomOccupancyManager: React.FC<RoomOccupancyManagerProps> = ({ item, occupancy, onOccupancyChange }) => {
-  const handleUpdate = (field: keyof OccupancyDetail, delta: number) => {
-    const newValue = occupancy[field] + delta;
-    
-    if (field === 'extra_adults' && (newValue < 0 || newValue > item.room.extra_capacity)) return;
-    if (field === 'children' && (newValue < 0 || newValue > item.room.child_capacity)) return;
-
-    onOccupancyChange(item.id, { ...occupancy, [field]: newValue });
-  };
-
-  return (
-    <div className="p-4 bg-gray-50 rounded-lg border mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-      {/* Column 1: Room Details */}
-      <div className="flex-1">
-        <h3 className="font-bold text-lg text-gray-800">{item.room.name} <span className="text-sm font-normal">({toPersianDigits(item.quantity)} اتاق)</span></h3>
-        <p className="text-sm text-gray-500">ظرفیت پایه: {toPersianDigits(item.room.base_capacity)} نفر</p>
-      </div>
-      
-      {/* Column 2 & 3: Occupancy Counters */}
-      <div className="flex items-center gap-4">
-        {/* Extra Adults Counter */}
-        {item.room.extra_capacity > 0 && (
-            <div className="flex items-center justify-between p-2 bg-white rounded-md border min-w-[200px]">
-              <div>
-                <label className="font-semibold text-sm text-gray-700">بزرگسال اضافه</label>
-                <p className="text-xs text-gray-500">حداکثر {toPersianDigits(item.room.extra_capacity)}</p>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button size="icon" variant="secondary" onClick={() => handleUpdate('extra_adults', 1)} disabled={occupancy.extra_adults >= item.room.extra_capacity} className="w-8 h-8">
-                  <Plus className="w-4 h-4" />
-                </Button>
-                <span className="font-bold text-md w-6 text-center">{toPersianDigits(occupancy.extra_adults)}</span>
-                <Button size="icon" variant="secondary" onClick={() => handleUpdate('extra_adults', -1)} disabled={occupancy.extra_adults <= 0} className="w-8 h-8">
-                  <Minus className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-        )}
-
-        {/* Children Counter */}
-        {item.room.child_capacity > 0 && (
-            <div className="flex items-center justify-between p-2 bg-white rounded-md border min-w-[200px]">
-              <div>
-                <label className="font-semibold text-sm text-gray-700">کودک</label>
-                <p className="text-xs text-gray-500">حداکثر {toPersianDigits(item.room.child_capacity)}</p>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button size="icon" variant="secondary" onClick={() => handleUpdate('children', 1)} disabled={occupancy.children >= item.room.child_capacity} className="w-8 h-8">
-                  <Plus className="w-4 h-4" />
-                </Button>
-                <span className="font-bold text-md w-6 text-center">{toPersianDigits(occupancy.children)}</span>
-                <Button size="icon" variant="secondary" onClick={() => handleUpdate('children', -1)} disabled={occupancy.children <= 0} className="w-8 h-8">
-                  <Minus className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// Helper component for creating collapsible sections
-interface AccordionSectionProps {
-  title: string;
-  isOpen: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}
-const AccordionSection: React.FC<AccordionSectionProps> = ({ title, isOpen, onToggle, children }) => (
-  <div className="p-6 bg-white rounded-xl shadow-lg border border-gray-100 mb-6">
-    <button type="button" onClick={onToggle} className="flex items-center justify-between w-full font-bold text-2xl text-gray-800">
-      {title}
-      <ChevronDown className={`w-6 h-6 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-    </button>
-    {isOpen && (
-      <div className="mt-4 pt-4 border-t">
-        {children}
-      </div>
-    )}
-  </div>
-);
-// end modify
-
+// --- Main Page Component ---
 
 const CheckoutPage: React.FC = () => {
     const router = useRouter();
     const { user, isAuthenticated } = useAuth();
+    
+    // Core State
     const [cart, setCart] = useState<CartItem[]>([]);
     const [checkIn, setCheckIn] = useState('');
     const [checkOut, setCheckOut] = useState('');
     const [duration, setDuration] = useState(0);
+    
+    // Guest & Form State
     const [guests, setGuests] = useState<Partial<GuestPayload>[]>([]);
     const [rulesAccepted, setRulesAccepted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    // Services State
     const [selectedServices, setSelectedServices] = useState<SelectedServicePayload[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentService, setCurrentService] = useState<HotelService | null>(null);
 
-    const [occupancyDetails, setOccupancyDetails] = useState<Record<string, OccupancyDetail>>({});
-    const [isOccupancyOpen, setOccupancyOpen] = useState(true);
+    // UI State
     const [isGuestDetailsOpen, setGuestDetailsOpen] = useState(false);
 
+    // 1. Load Data from LocalStorage
     useEffect(() => {
         const storedCart = localStorage.getItem('bookingCart');
         const storedCheckIn = localStorage.getItem('checkInDate');
@@ -215,47 +164,45 @@ const CheckoutPage: React.FC = () => {
         const storedDuration = localStorage.getItem('duration');
 
         if (storedCart && storedCheckIn && storedCheckOut && storedDuration) {
-            const parsedCart: CartItem[] = JSON.parse(storedCart);
-            setCart(parsedCart);
+            setCart(JSON.parse(storedCart));
             setCheckIn(storedCheckIn);
             setCheckOut(storedCheckOut);
             setDuration(parseInt(storedDuration, 10));
-            
-            const initialOccupancy = parsedCart.reduce((acc, item) => {
-              acc[item.id] = { extra_adults: 0, children: 0 };
-              return acc;
-            }, {} as Record<string, OccupancyDetail>);
-            setOccupancyDetails(initialOccupancy);
-
         } else {
             router.push('/');
         }
     }, [router]);
     
+    // 2. Calculate Total Guests directly from Cart Items
     const totalGuests = useMemo(() => {
-      if (Object.keys(occupancyDetails).length === 0) return 0;
       return cart.reduce((total, item) => {
-        const occupancy = occupancyDetails[item.id] || { extra_adults: 0, children: 0 };
-        const guestsPerRoom = item.room.base_capacity + occupancy.extra_adults + occupancy.children;
-        return total + (guestsPerRoom * item.quantity);
+        // base + extra adults + children (already selected in previous step)
+        const roomCapacity = item.room.base_capacity + item.extra_adults + item.children_count;
+        return total + (roomCapacity * item.quantity);
       }, 0);
-    }, [cart, occupancyDetails]);
+    }, [cart]);
 
+    // 3. Initialize Guest Forms
     useEffect(() => {
-      if (totalGuests > 0) {
-        setGuests(Array(totalGuests).fill({}));
+      if (totalGuests > 0 && guests.length !== totalGuests) {
+        const newGuests = Array(totalGuests).fill({});
+        setGuests(prev => {
+            // Keep existing guest data if available when resizing (rare case here)
+            return newGuests.map((_, i) => prev[i] || {});
+        });
       }
     }, [totalGuests]);
 
+    // 4. Calculate Price (Using Cart Data directly)
     const { data: bookingDetails, isLoading: priceLoading } = useQuery<MultiPriceData>({
-        queryKey: ['calculatePriceCheckout', cart, checkIn, checkOut, user, occupancyDetails],
+        queryKey: ['calculatePriceCheckout', cart, checkIn, checkOut, user],
         queryFn: () => {
             const bookingRoomsPayload = cart.map(item => ({
                 room_type_id: item.room.id,
                 board_type_id: item.selected_board.id,
                 quantity: item.quantity,
-                extra_adults: occupancyDetails[item.id]?.extra_adults || 0,
-                children_count: occupancyDetails[item.id]?.children || 0,
+                extra_adults: item.extra_adults,     // DIRECTLY FROM CART
+                children_count: item.children_count, // DIRECTLY FROM CART
             }));
             
             return calculateMultiPrice({
@@ -265,7 +212,7 @@ const CheckoutPage: React.FC = () => {
                 user_id: user?.id,
             });
         },
-        enabled: cart.length > 0 && !!checkIn && !!checkOut && duration > 0 && Object.keys(occupancyDetails).length > 0,
+        enabled: cart.length > 0 && !!checkIn && !!checkOut && duration > 0,
         refetchOnWindowFocus: false,
         staleTime: 5 * 60 * 1000,
     });
@@ -289,53 +236,27 @@ const CheckoutPage: React.FC = () => {
             }
         },
         onError: (error: any) => {
-            console.error("Booking Error Response Data:", error.response?.data); // Log full error data
+            console.error("Booking Error:", error);
             let errorMessage = 'خطا در ثبت رزرو. لطفاً مجدداً تلاش کنید.';
             const errorData = error.response?.data;
 
             if (errorData) {
-                // If data is a string (simple error message)
-                if (typeof errorData === 'string') {
-                    errorMessage = errorData;
-                }
-                // If data has a specific 'error' key (common pattern)
-                else if (errorData.error) {
-                     errorMessage = errorData.error;
-                }
-                // If data is an object of field errors (DRF default)
+                if (typeof errorData === 'string') errorMessage = errorData;
+                else if (errorData.error) errorMessage = errorData.error;
                 else if (typeof errorData === 'object') {
-                     try {
-                         // --- START MODIFICATION ---
-                         // Try to format field errors, specifically handling nested booking_rooms error
-                         const fieldErrors = Object.entries(errorData)
-                             .map(([field, errors]) => {
-                                 // If it's the booking_rooms error and it's an object/array, stringify it directly
-				 if ((field === 'booking_rooms' || field === 'guests') && typeof errors === 'object' && errors !== null) {	 
-                                     return `${field}: ${JSON.stringify(errors, null, 2)}`; // Pretty print the error object/array
-                                 }
-
-                                 // Original formatting for other simple field errors
-                                 const messages = Array.isArray(errors) ? errors.join(', ') : String(errors);
-                                 return `${field}: ${messages}`;
-                             })
-                             .join(' | ');
-                         // --- END MODIFICATION ---
-                         if (fieldErrors) errorMessage = fieldErrors;
-                     } catch (e) { console.error("Error formatting validation errors:", e); }
+                     // Flatten field errors for display
+                     const values = Object.values(errorData).flat();
+                     if (values.length > 0) errorMessage = String(values[0]);
                 }
             }
             setError(errorMessage);
         },
- 	onSettled: () => setLoading(false),
+        onSettled: () => setLoading(false),
     });
 
-    const handleOccupancyChange = useCallback((cartItemId: string, newOccupancy: OccupancyDetail) => {
-      setOccupancyDetails(prev => ({ ...prev, [cartItemId]: newOccupancy }));
-    }, []);
-
-    const handleGuestChange = (index: number, data: Partial<GuestPayload>) => {
+    const handleGuestChange = useCallback((index: number, data: Partial<GuestPayload>) => {
         setGuests(prev => prev.map((guest, i) => i === index ? { ...guest, ...data } : guest));
-    };
+    }, []);
     
     const handleSelectService = useCallback((servicePayload: SelectedServicePayload) => {
         setSelectedServices(prev => [...prev.filter(s => s.id !== servicePayload.id), servicePayload]);
@@ -362,49 +283,42 @@ const CheckoutPage: React.FC = () => {
             return;
         }
 
-        // --- CORRECTED VALIDATION LOGIC ---
-        // 1. Validate the principal guest (first guest)
+        // Validate Principal Guest
         const principalGuest = guests[0];
-        if (!principalGuest || !principalGuest.first_name || !principalGuest.last_name || (!principalGuest.national_id && !principalGuest.passport_number)) {
+        if (!principalGuest || !principalGuest.first_name || !principalGuest.last_name) {
             setError('لطفاً اطلاعات سرپرست رزرو (نفر اول) را به صورت کامل وارد کنید.');
             return;
         }
 
-        // 2. Filter out other guests who have not been filled out
-        const otherGuests = guests.slice(1).filter(g => g.first_name && g.last_name);
-        
-        // 3. Combine principal guest with filled-out other guests
-        const finalGuests = [principalGuest, ...otherGuests].map(g => ({
-            ...g,
-            is_foreign: g.is_foreign || false
-        })) as GuestPayload[];
+        // Clean Guests Data (Filter out empty forms)
+        const finalGuests = guests
+            .filter(g => g.first_name && g.last_name)
+            .map(g => ({ ...g, is_foreign: g.is_foreign || false })) as GuestPayload[];
 
-
-        // --- FIX: Aligned payload with pricing logic ---
         const payload: BookingPayload = {
             booking_rooms: cart.map(item => ({
                 room_type_id: item.room.id,
                 board_type_id: item.selected_board.id,
                 quantity: item.quantity,
-                extra_adults: occupancyDetails[item.id]?.extra_adults || 0, // <-- FIX: Send 'extra_adults'
-                children_count: occupancyDetails[item.id]?.children || 0, // <-- FIX: Send 'children_count'
-                extra_requests: null, // UI does not collect this, so pass null.
+                extra_adults: item.extra_adults,     // DIRECTLY FROM CART
+                children_count: item.children_count, // DIRECTLY FROM CART
+                extra_requests: null,
             })),
             check_in: checkIn,
             check_out: checkOut,
             guests: finalGuests,
             rules_accepted: rulesAccepted,
             selected_services: selectedServices,
-	    agency_id: (isAuthenticated && user?.agency_id)
-                            ? user.agency_id
-                            : null,
-	    
+            agency_id: (isAuthenticated && user?.agency_id) ? user.agency_id : null,
         };
 
         setLoading(true);
         mutation.mutate(payload);
     };   
+
+    // --- Summary Component ---
     const CheckoutSummary = () => {
+        // Calculate services price
         const totalServicesPrice = useMemo(() => {
             return selectedServices.reduce((total, selected) => {
                 const serviceInfo = availableServices?.find(s => s.id === selected.id);
@@ -412,69 +326,127 @@ const CheckoutPage: React.FC = () => {
                 let price = (serviceInfo.pricing_model === 'PERSON') ? serviceInfo.price * selected.quantity : serviceInfo.price;
                 return total + price;
             }, 0);
-        }, [selectedServices, availableServices, totalGuests]);
+        }, [selectedServices, availableServices]);
 
+        // Base price comes from Cart logic (client-side approximation)
         const basePrice = useMemo(() => cart.reduce((total, item) => total + item.total_price, 0), [cart]);
-        const extraOccupancyPrice = (bookingDetails?.total_price ?? basePrice) - basePrice;
-        const finalTotalPrice = basePrice + extraOccupancyPrice + totalServicesPrice;
+        
+        // Backend Total Price (includes complex logic, special days, etc.)
+        const backendTotal = bookingDetails?.total_price ?? basePrice;
+        
+        // Final Total
+        const finalTotalPrice = backendTotal + totalServicesPrice;
 
         const formattedCheckIn = checkIn ? new DateObject({ date: checkIn, calendar: DATE_CONFIG.calendar, locale: DATE_CONFIG.locale }).format("dddd D MMMM") : '';
         const formattedCheckOut = checkOut ? new DateObject({ date: checkOut, calendar: DATE_CONFIG.calendar, locale: DATE_CONFIG.locale }).format("dddd D MMMM") : '';
 
         return (
-            <div className="p-6 bg-white rounded-xl shadow-lg border border-gray-100 sticky top-8">
-                <h2 className="text-xl font-bold mb-4 border-b pb-3">خلاصه رزرو</h2>
+            <div className="p-6 bg-white rounded-xl shadow-lg border border-gray-100 sticky top-24 transition-all duration-300">
+                <h2 className="text-xl font-bold mb-4 border-b pb-3 text-gray-800">خلاصه رزرو</h2>
                 
-                <div className="space-y-3 pb-3 border-b">
-                    <div className="flex justify-between text-sm"><span className="text-gray-600">تاریخ ورود:</span><span className="font-semibold">{toPersianDigits(formattedCheckIn)}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-600">تاریخ خروج:</span><span className="font-semibold">{toPersianDigits(formattedCheckOut)}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-600">مدت اقامت:</span><span className="font-semibold">{toPersianDigits(duration)} شب</span></div>
+                <div className="space-y-3 pb-3 border-b text-sm">
+                    <div className="flex justify-between"><span className="text-gray-500">تاریخ ورود:</span><span className="font-semibold text-gray-800">{toPersianDigits(formattedCheckIn)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">تاریخ خروج:</span><span className="font-semibold text-gray-800">{toPersianDigits(formattedCheckOut)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">مدت اقامت:</span><span className="font-semibold text-gray-800">{toPersianDigits(duration)} شب</span></div>
                 </div>
 
-                <div className="mt-4 pt-4 border-t">
-                    <div className="flex justify-between items-center text-sm mb-2"><span className="text-gray-600">هزینه پایه اتاق‌ها:</span><span className="font-semibold">{toPersianDigits(basePrice.toLocaleString())} تومان</span></div>
-                    <div className="flex justify-between items-center text-sm mb-2"><span className="text-gray-600">هزینه نفرات اضافه:</span><span className="font-semibold">{priceLoading ? '...' : `${toPersianDigits(extraOccupancyPrice.toLocaleString())} تومان`}</span></div>
-                    <div className="flex justify-between items-center text-sm mb-3"><span className="text-gray-600">جمع هزینه خدمات:</span><span className="font-semibold">{toPersianDigits(totalServicesPrice.toLocaleString())} تومان</span></div>
-                    <div className="font-bold text-xl flex justify-between items-center text-red-600"><span >مبلغ نهایی:</span><span>{priceLoading ? '...' : `${toPersianDigits(finalTotalPrice.toLocaleString())} تومان`}</span></div>
+                <div className="mt-4 pt-2 space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600">مبلغ اتاق‌ها و نفرات:</span>
+                        <span className="font-bold text-gray-900">{priceLoading ? '...' : formatPrice(backendTotal)} <span className="text-xs font-normal">ریال</span></span>
+                    </div>
+                    
+                    {totalServicesPrice > 0 && (
+                        <div className="flex justify-between items-center text-sm text-blue-600">
+                            <span>خدمات اضافی:</span>
+                            <span className="font-bold">{formatPrice(totalServicesPrice)} <span className="text-xs font-normal">ریال</span></span>
+                        </div>
+                    )}
+                    
+                    <div className="border-t border-dashed my-3 pt-3">
+                         <div className="flex justify-between items-center text-lg font-black text-primary-brand">
+                            <span>مبلغ نهایی:</span>
+                            <span>{priceLoading ? 'محاسبه...' : formatPrice(finalTotalPrice)} ریال</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
     };
 
     return (
-        <><Header /><div className="container mx-auto p-4 md:p-8" dir="rtl">
+        <>
+        <Header />
+        <div className="container mx-auto p-4 md:p-8 min-h-screen" dir="rtl">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 order-2 lg:order-1">
+                
+                {/* LEFT COLUMN: Forms */}
+                <div className="lg:col-span-2 order-2 lg:order-1 space-y-6">
                     <form onSubmit={handleFinalSubmit}>
-                        <AccordionSection title="۱. مدیریت اتاق‌ها و نفرات" isOpen={isOccupancyOpen} onToggle={() => setOccupancyOpen(!isOccupancyOpen)}>
-                          {cart.map(item => (
-                            <RoomOccupancyManager 
-                              key={item.id}
-                              item={item}
-                              occupancy={occupancyDetails[item.id]}
-                              onOccupancyChange={handleOccupancyChange}
-                            />
-                          ))}
-                        </AccordionSection>
                         
+                        {/* 1. Rooms Summary (Read Only) */}
                         <div className="p-6 bg-white rounded-xl shadow-lg border border-gray-100">
-                            <h2 className="text-2xl font-bold mb-4">۲. اطلاعات میهمانان</h2>
-                            <p className="text-sm text-gray-500 mb-4 p-3 bg-blue-50 rounded-md flex items-center"><Info className="ml-2 w-5 h-5 text-blue-500"/>اطلاعات نفر اول به عنوان سرپرست رزرو در نظر گرفته می‌شود.</p>
+                             <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
+                                <span className="w-1 h-6 bg-primary-brand rounded-full"></span>
+                                ۱. جزئیات اتاق‌های انتخابی
+                            </h2>
+                            <div className="space-y-2">
+                                {cart.map(item => (
+                                    <RoomSummaryItem key={item.id} item={item} />
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 2. Guest Information */}
+                        <div className="p-6 bg-white rounded-xl shadow-lg border border-gray-100 mt-6">
+                            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
+                                <span className="w-1 h-6 bg-primary-brand rounded-full"></span>
+                                ۲. اطلاعات میهمانان
+                            </h2>
+                            
+                            <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-3 text-sm text-blue-800">
+                                <Info className="w-5 h-5 flex-shrink-0 mt-0.5"/>
+                                <p>
+                                    وارد کردن اطلاعات <strong>سرپرست رزرو (نفر اول)</strong> الزامی است. 
+                                    <br/>
+                                    اطلاعات سایر میهمانان ({toPersianDigits(Math.max(0, guests.length - 1))} نفر دیگر) اختیاری است، اما جهت تسریع در پذیرش هتل پیشنهاد می‌شود تکمیل گردد.
+                                </p>
+                            </div>
                             
                             {guests.length > 0 && (
-                              <GuestInputForm index={0} value={guests[0]} onChange={handleGuestChange} isPrincipal={true} containerClass="bg-yellow-50" isUnauthenticated={!isAuthenticated} />
+                              <GuestInputForm 
+                                index={0} 
+                                value={guests[0]} 
+                                onChange={handleGuestChange} 
+                                isPrincipal={true} 
+                                containerClass="bg-white border-2 border-primary-brand/20 shadow-sm"
+                                isUnauthenticated={!isAuthenticated}
+                              />
                             )}
                             
                             {guests.length > 1 && (
-                              <div className="mt-4 border-t pt-4">
-                                <button type="button" onClick={() => setGuestDetailsOpen(!isGuestDetailsOpen)} className="flex items-center justify-between w-full font-bold text-lg text-blue-700">
-                                  اطلاعات سایر میهمانان ({toPersianDigits(guests.length - 1)} نفر)
-                                  <ChevronDown className={`w-6 h-6 transition-transform ${isGuestDetailsOpen ? 'rotate-180' : ''}`} />
+                              <div className="mt-6 border-t pt-4">
+                                <button 
+                                    type="button" 
+                                    onClick={() => setGuestDetailsOpen(!isGuestDetailsOpen)} 
+                                    className="flex items-center justify-between w-full font-bold text-gray-700 hover:text-primary-brand transition-colors p-2 rounded hover:bg-gray-50"
+                                >
+                                  <span>تکمیل اطلاعات سایر میهمانان (اختیاری)</span>
+                                  <ChevronDown className={`w-5 h-5 transition-transform ${isGuestDetailsOpen ? 'rotate-180' : ''}`} />
                                 </button>
+                                
                                 {isGuestDetailsOpen && (
-                                  <div className="mt-4 space-y-4">
+                                  <div className="mt-4 space-y-4 animate-fadeIn">
                                     {guests.slice(1).map((guest, index) => (
-                                      <GuestInputForm key={index + 1} index={index + 1} value={guest} onChange={handleGuestChange} isPrincipal={false} containerClass="bg-gray-50" isUnauthenticated={!isAuthenticated} />
+                                      <GuestInputForm 
+                                        key={index + 1} 
+                                        index={index + 1} 
+                                        value={guest} 
+                                        onChange={handleGuestChange} 
+                                        isPrincipal={false} 
+                                        containerClass="bg-gray-50 border border-gray-200"
+                                        isUnauthenticated={!isAuthenticated}
+                                      />
                                     ))}
                                   </div>
                                 )}
@@ -482,15 +454,51 @@ const CheckoutPage: React.FC = () => {
                             )}
                         </div>
 
-                        <div className="mt-8 pt-6 border-t">
-                            <h2 className="text-2xl font-bold mb-4">تأیید نهایی و ثبت رزرو</h2>
-                            <label className="flex items-center mb-6 cursor-pointer"><input type="checkbox" checked={rulesAccepted} onChange={(e) => setRulesAccepted(e.target.checked)} className="ml-3 w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" /><span className="text-sm text-gray-700">قوانین و شرایط رزرو را مطالعه کرده و می‌پذیرم.</span></label>
-                            {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
-                            <Button type="submit" disabled={loading || priceLoading || !rulesAccepted} className="w-full md:w-auto">{loading || priceLoading ? 'در حال پردازش...' : 'ثبت نهایی و هدایت به صفحه پرداخت'}</Button>
+                        {/* 3. Final Actions */}
+                        <div className="mt-8 pt-6">
+                            <div className="flex items-start gap-3 mb-6 p-4 bg-gray-50 rounded-lg border">
+                                <input 
+                                    type="checkbox" 
+                                    id="rules"
+                                    checked={rulesAccepted} 
+                                    onChange={(e) => setRulesAccepted(e.target.checked)} 
+                                    className="mt-1 w-5 h-5 text-primary-brand border-gray-300 rounded focus:ring-primary-brand cursor-pointer" 
+                                />
+                                <label htmlFor="rules" className="text-sm text-gray-700 cursor-pointer leading-6 select-none">
+                                    <span className="font-bold text-gray-900">قوانین و مقررات</span> رزرو هتل را به دقت مطالعه کرده و می‌پذیرم.
+                                    مسئولیت صحت اطلاعات وارد شده بر عهده کاربر می‌باشد.
+                                </label>
+                            </div>
+                            
+                            {error && (
+                                <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 border border-red-100 flex items-center gap-2">
+                                    <Info className="w-5 h-5"/>
+                                    {error}
+                                </div>
+                            )}
+
+                            <Button 
+                                type="submit" 
+                                disabled={loading || priceLoading || !rulesAccepted} 
+                                className="w-full py-4 text-lg font-bold shadow-xl shadow-blue-500/20 flex items-center justify-center gap-2"
+                            >
+                                {loading || priceLoading ? (
+                                    'در حال پردازش...'
+                                ) : (
+                                    <>
+                                        <CheckCircle className="w-5 h-5" />
+                                        تایید نهایی و پرداخت
+                                    </>
+                                )}
+                            </Button>
                         </div>
                     </form>
                 </div>
-                <div className="lg:col-span-1 order-1 lg:order-2">
+
+                {/* RIGHT COLUMN: Summary & Services */}
+                <div className="lg:col-span-1 order-1 lg:order-2 space-y-6">
+                    <CheckoutSummary />
+
                     {!isLoadingServices && availableServices && availableServices.length > 0 && totalGuests > 0 && (
                         <ServicesStep 
                             services={availableServices} 
@@ -500,14 +508,21 @@ const CheckoutPage: React.FC = () => {
                             totalGuests={totalGuests}
                         />
                     )}
-                    <CheckoutSummary />
                 </div>
             </div>
         </div>
         
-        {currentService && (<ServiceDetailsModal service={currentService} isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setCurrentService(null); }} onSave={handleSaveServiceDetails}/>)}
+        {currentService && (
+            <ServiceDetailsModal 
+                service={currentService} 
+                isOpen={isModalOpen} 
+                onClose={() => { setIsModalOpen(false); setCurrentService(null); }} 
+                onSave={handleSaveServiceDetails}
+            />
+        )}
 
-        <Footer /></>
+        <Footer />
+        </>
     );
 };
 
