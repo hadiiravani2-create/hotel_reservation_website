@@ -1,104 +1,28 @@
 // src/pages/hotels/[slug].tsx
-// version: 4.0.0
-// FEATURE: Major UI enhancements including Header/Footer, star icons, read-more, and new info sections.
+// version: 5.0.0
+// REFACTOR: Complete component separation for better maintainability and cleaner code.
 
 import { GetServerSideProps } from 'next';
-import Image from 'next/image';
 import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { ParsedUrlQuery } from 'querystring';
 
-// --- API and Type Imports ---
-import { getHotelDetails, HotelDetails } from '@/api/pricingService';
-import { AvailableRoom, CartItem, CancellationPolicy, CancellationRule } from '@/types/hotel';
+// --- Imports ---
+import { getHotelDetails } from '@/api/pricingService';
+import { AvailableRoom, CartItem, HotelDetails } from '@/types/hotel';
+import { useAuth } from '@/hooks/useAuth';
 
-// --- Component Imports ---
+// --- UI Components ---
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import BookingWidget from '@/components/BookingWidget';
-import RoomCard from '@/components/RoomCard';
-import { useAuth } from '@/hooks/useAuth';
-import { Star, Clock, LogIn, LogOut, Info, AlertTriangle } from 'lucide-react';
 
-// --- Helper Functions and Components ---
-const toPersianDigits = (str: string | number | undefined | null) => {
-    if (str === undefined || str === null) return '';
-    return String(str).replace(/\d/g, (d) => ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'][parseInt(d)]);
-};
-
-const StarRating = ({ count }: { count: number }) => (
-  <div className="flex items-center">
-    {Array.from({ length: count }, (_, i) => (
-      <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
-    ))}
-  </div>
-);
-
-// --- Assuming ReadMore component exists ---
-const ReadMore = ({ text, maxLength }: { text: string; maxLength: number }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  if (!text) return null;
-  const needsReadMore = text.length > maxLength;
-
-  return (
-    <div className="text-sm text-gray-600">
-      {isExpanded || !needsReadMore ? text : `${text.substring(0, maxLength)}...`}
-      {needsReadMore && (
-        <button 
-          onClick={() => setIsExpanded(!isExpanded)} 
-          className="text-blue-600 hover:underline ml-1"
-        >
-          {isExpanded ? 'کمتر' : 'بیشتر'}
-        </button>
-      )}
-    </div>
-  );
-};
-
-// --- START: New Helper Component for Cancellation Policy ---
-interface CancellationPolicyProps {
-  policy: CancellationPolicy;
-  title: string;
-}
-
-const CancellationPolicyDisplay: React.FC<CancellationPolicyProps> = ({ policy, title }) => {
-  
-  const translatePenaltyType = (type: string): string => {
-    switch (type) {
-      case 'PERCENT_TOTAL': return 'درصد از کل مبلغ رزرو';
-      case 'PERCENT_FIRST_NIGHT': return 'درصد از هزینه شب اول';
-      case 'FIXED_NIGHTS': return 'شب اقامت';
-      default: return type;
-    }
-  };
-
-  const formatRule = (rule: CancellationRule): string => {
-    const value = rule.penalty_type === 'FIXED_NIGHTS' ? Math.floor(rule.penalty_value) : rule.penalty_value;
-    const daysText = rule.days_before_checkin_min === rule.days_before_checkin_max
-      ? `${toPersianDigits(rule.days_before_checkin_min)} روز`
-      : `از ${toPersianDigits(rule.days_before_checkin_min)} تا ${toPersianDigits(rule.days_before_checkin_max)} روز`;
-      
-    return `${daysText} قبل از ورود: جریمه معادل ${toPersianDigits(value)} ${translatePenaltyType(rule.penalty_type)}`;
-  };
-
-  return (
-    <div className="flex items-start mb-4"> {/* Added margin-bottom */}
-      <AlertTriangle className="w-5 h-5 text-orange-600 mt-1 mr-2 flex-shrink-0" />
-      <div>
-        <h3 className="font-semibold text-gray-700 mb-1">{title} ({policy.name})</h3>
-        {policy.rules && policy.rules.length > 0 ? (
-          <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-            {policy.rules.sort((a,b) => a.days_before_checkin_min - b.days_before_checkin_min).map((rule) => (
-              <li key={rule.id}>{formatRule(rule)}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-gray-500">قوانین مشخصی تعریف نشده است.</p>
-        )}
-      </div>
-    </div>
-  );
-};
+// --- New Sub-Components ---
+import HotelHeader from '@/components/hotel-detail/HotelHeader';
+import HotelGallery from '@/components/hotel-detail/HotelGallery';
+import HotelInfoSummary from '@/components/hotel-detail/HotelInfoSummary';
+import HotelDescription from '@/components/hotel-detail/HotelDescription';
+import HotelRoomList from '@/components/hotel-detail/HotelRoomList';
 
 interface HotelPageProps {
   hotel: HotelDetails;
@@ -116,11 +40,12 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
   
   const { user } = useAuth();
   
+  // State Management
   const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>(initialRooms);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
+  // Handlers
   const handleRoomsFetch = useCallback((rooms: AvailableRoom[]) => {
     setAvailableRooms(rooms);
   }, []);
@@ -136,19 +61,19 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
   const handleAddToCart = useCallback((newItem: CartItem) => {
     setCartItems((prevItems) => {
       const existingItemIndex = prevItems.findIndex((item) => item.id === newItem.id);
-      
       const targetRoom = availableRooms.find(r => r.id === newItem.room.id);
       const roomMaxAvailable = targetRoom?.availability_quantity || 0;
       
       let newTotalReserved = reservedRoomsMap[newItem.room.id] || 0;
       
+      // If updating existing item, subtract its old quantity first
       if (existingItemIndex > -1) {
         newTotalReserved -= prevItems[existingItemIndex].quantity;
       }
       newTotalReserved += newItem.quantity;
       
       if (newTotalReserved > roomMaxAvailable) {
-          alert(`خطا: مجموع تعداد اتاق‌های انتخابی برای ${newItem.room.name} از موجودی کل (${roomMaxAvailable} اتاق) فراتر می‌رود.`);
+          alert(`خطا: مجموع تعداد اتاق‌های انتخابی از موجودی کل (${roomMaxAvailable} اتاق) بیشتر است.`);
           return prevItems;
       }
 
@@ -160,121 +85,65 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
         return [...prevItems, newItem];
       }
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Smooth scroll to widget or cart if needed (optional)
   }, [availableRooms, reservedRoomsMap]);
 
   const handleRemoveFromCart = useCallback((itemId: string) => {
     setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
   }, []);
 
+  // View
   return (
-    // start modify
-    <div className="bg-gray-50" dir="rtl">
+    <div className="bg-gray-50 min-h-screen" dir="rtl">
       <Header />
+      
       <div className="container mx-auto p-4 lg:p-8">
-        <header className="mb-8">
-            <div className="flex items-center gap-4">
-              <h1 className="text-4xl font-extrabold text-gray-800">{hotel.name}</h1>
-              {hotel.is_online && (
-                <span className="bg-green-100 text-green-800 text-sm font-bold px-3 py-1 rounded-full">رزرو آنی و آنلاین</span>
-              )}
-            </div>
-            <div className="flex items-center gap-4 text-lg text-gray-600 mt-2">
-              <StarRating count={hotel.stars} />
-              <span>-</span>
-              <p>{hotel.address}</p>
-            </div>
-        </header>
+        
+        {/* 1. Header Section */}
+        <HotelHeader hotel={hotel} />
 
         <div className="flex flex-col lg:flex-row gap-8">
+          {/* Main Content Column */}
           <main className="w-full lg:w-2/3">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6 h-96 rounded-lg overflow-hidden shadow-lg">
-                  <div className="col-span-2 row-span-2 relative">
-                      <Image src={hotel.images[0]?.image || '/placeholder.png'} layout="fill" objectFit="cover" alt={hotel.name} priority />
-                  </div>
-                  {hotel.images.slice(1, 4).map((img, index) => (
-                      <div key={index} className="relative">
-                          <Image src={img.image} layout="fill" objectFit="cover" alt={`نمای هتل ${index + 2}`} />
-                      </div>
-                  ))}
-              </div>
+              
+              {/* 2. Gallery */}
+              <HotelGallery images={hotel.images} hotelName={hotel.name} />
 
-              <div className="flex justify-around items-center bg-white p-4 rounded-lg shadow-md mb-8 border">
-                  <div className="flex items-center gap-2 text-gray-700">
-                      <LogIn className="w-6 h-6 text-cyan-600" />
-                      <div>
-                          <p className="text-sm">ساعت ورود</p>
-                          <p className="font-bold text-lg">{toPersianDigits(hotel.check_in_time)}</p>
-                      </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                      <LogOut className="w-6 h-6 text-red-600" />
-                      <div>
-                          <p className="text-sm">ساعت خروج</p>
-                          <p className="font-bold text-lg">{toPersianDigits(hotel.check_out_time)}</p>
-                      </div>
-                  </div>
-              </div>
+              {/* 3. Info Summary (Check-in/out) */}
+              <HotelInfoSummary checkInTime={hotel.check_in_time} checkOutTime={hotel.check_out_time} />
 
-              <div className="bg-white p-6 rounded-lg shadow-md mb-8 border">
-                <h2 className="text-2xl font-bold mb-4">توضیحات هتل</h2>
-                <p className={`text-gray-700 leading-relaxed transition-all duration-300 ${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}>
-                    {hotel.description}
-                </p>
-                <button 
-                  onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                  className="text-blue-600 font-semibold mt-2"
-                >
-                  {isDescriptionExpanded ? 'بستن' : 'بیشتر بخوانید...'}
-                </button>
-              </div>
+              {/* 4. Description */}
+              <HotelDescription description={hotel.description} />
 
-              <section id="rooms-section">
-                  <h2 className="text-3xl font-bold mb-6 border-b pb-3">انتخاب اتاق</h2>
-                  {isLoading ? (
-                      <div className="text-center p-10 bg-white rounded-lg shadow">
-                          <p className="text-lg font-semibold text-blue-600">در حال جستجوی بهترین قیمت‌ها برای شما...</p>
-                      </div>
-                  ) : (
-                      <div className="space-y-6">
-                          {availableRooms.length > 0 ? (
-                              availableRooms.map((room) => (
-                                  <RoomCard 
-                                    key={room.id} 
-                                    room={room} 
-                                    onAddToCart={handleAddToCart}
-                                    duration={duration} 
-                                    reservedCount={reservedRoomsMap[room.id] || 0}
-				    hotelId={hotel.id}
-                                  />
-                              ))
-                          ) : (
-                              <div className="text-center p-10 bg-gray-100 rounded-md border">
-                                  <p className="font-semibold text-gray-700">
-                                      برای مشاهده قیمت و اتاق‌های موجود، لطفا تاریخ ورود و مدت اقامت خود را در پنل کناری مشخص کنید.
-                                  </p>
-                              </div>
-                          )}
-                      </div>
-                  )}
-              </section>
+              {/* 5. Room List */}
+              <HotelRoomList 
+                rooms={availableRooms}
+                isLoading={isLoading}
+                onAddToCart={handleAddToCart}
+                duration={duration}
+                reservedRoomsMap={reservedRoomsMap}
+                hotelId={hotel.id}
+              />
           </main>
 
+          {/* Sidebar Column */}
           <aside className="w-full lg:w-1/3">
-            <BookingWidget 
-              hotelSlug={hotel.slug}
-              onRoomsFetch={handleRoomsFetch}
-              setIsLoading={setIsLoading}
-              cartItems={cartItems}
-              onRemoveFromCart={handleRemoveFromCart}
-              userId={user?.id || null} 
-            />
+            <div className="sticky top-8">
+                <BookingWidget 
+                  hotelSlug={hotel.slug}
+                  onRoomsFetch={handleRoomsFetch}
+                  setIsLoading={setIsLoading}
+                  cartItems={cartItems}
+                  onRemoveFromCart={handleRemoveFromCart}
+                  userId={user?.id || null} 
+                />
+            </div>
           </aside>
         </div>
       </div>
+      
       <Footer />
     </div>
-    // end modify
   );
 };
 

@@ -1,86 +1,95 @@
 // src/api/pricingService.ts
-// version: 1.2.4
-// FIX: Corrected API paths for hotel services to match the new standardized /api/hotels/ prefix.
+// version: 1.5.0
+// FIX: Restored correct API paths (/api/hotels/...) and preserved all original functions.
+// FIX: Removed 'HotelDetails' definition (it's now in types/hotel.d.ts) to avoid duplication.
 
 import api from './coreService';
-import { AvailableRoom, CancellationPolicy } from '@/types/hotel'; 
+import { AvailableRoom, HotelDetails } from '@/types/hotel';
 
-// --- START: HotelDetails Interface (Unchanged) ---
-export interface HotelDetails {
+// --- Interfaces ---
+
+export interface SearchParams {
+  city_id: number;
+  check_in: string;
+  duration: number;
+  // Optional Filter params
+  min_price?: string; 
+  max_price?: string;
+  stars?: string;     
+  amenities?: string; 
+}
+
+export interface PriceQuoteInput {
+  room_type_id: number;
+  board_type_id: number;
+  check_in: string;
+  check_out: string;
+  adults?: number;
+  children?: number;
+}
+
+export interface MultiPriceInput {
+  booking_rooms: Array<{
+    room_type_id: number;
+    board_type_id: number;
+    quantity: number;
+    extra_adults: number;
+    children_count: number;
+  }>;
+  check_in: string;
+  check_out: string;
+  user_id?: number | null;
+}
+
+export interface MultiPriceData {
+  check_in: string;
+  check_out: string;
+  booking_rooms: any[]; // Simplified for brevity, detailed in input
+  user_id?: number | null;
+  total_price: number;
+}
+
+export interface CityOption {
     id: number;
     name: string;
     slug: string;
-    stars: number;
-    description: string;
-    address: string;
-    images: { image: string; caption: string | null; }[];
-    amenities: { id: number; name: string; icon: string | null; }[];
-    latitude: string;
-    longitude: string;
-    is_online: boolean;
-    rules: string | null;
-    check_in_time: string | null;
-    check_out_time: string | null;
-    available_rooms: AvailableRoom[];
-    cancellation_policy_normal: CancellationPolicy | null;
-    cancellation_policy_peak: CancellationPolicy | null;
-}
-// --- END: HotelDetails Interface ---
-
-// --- START: MultiPriceData (Unchanged) ---
-export interface MultiPriceData {
-    check_in: string;
-    check_out: string;
-    booking_rooms: Array<{
-      room_type_id: number;
-      board_type_id: number;
-      quantity: number;
-      extra_adults: number;
-      children_count: number;
-    }>;
-    user_id?: number | null;
-    total_price: number; 
 }
 
-// Endpoint: /pricing/api/calculate-multi-price/
-//export const calculateMultiPrice = async (data: MultiPriceData): Promise<{ total_price: number }> => {
-export const calculateMultiPrice = async (data: any): Promise<MultiPriceData> => {
-    const response = await api.post('/pricing/api/calculate-multi-price/', data);
-    return response.data;
+// --- API Functions ---
+
+// 1. Get List of Cities
+export const getCities = async (): Promise<CityOption[]> => {
+    try {
+        // FIX: Restored correct path
+        const response = await api.get('/api/hotels/cities/');
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching cities:", error);
+        return [];
+    }
 };
-// --- END: MultiPriceData ---
 
-// --- Hotel Search Functions ---
+// 2. Search Hotels (Enhanced with filters)
+export const searchHotels = async (params: SearchParams): Promise<any[]> => {
+  const queryParams = new URLSearchParams();
+  queryParams.append('city_id', params.city_id.toString());
+  queryParams.append('check_in', params.check_in);
+  queryParams.append('duration', params.duration.toString());
 
-export interface SearchParams { 
-  city_id: number;
-  check_in: string;    
-  duration: number; 
-  // ... other optional params
-}
+  if (params.min_price) queryParams.append('min_price', params.min_price);
+  if (params.max_price) queryParams.append('max_price', params.max_price);
+  if (params.stars) queryParams.append('stars', params.stars);
+  if (params.amenities) queryParams.append('amenities', params.amenities);
 
-export interface HotelSearchResult {
-  hotel_id: number;
-  hotel_name: string;
-  hotel_slug: string;
-  hotel_stars: number;
-  min_price: number;
-}
-
-// Exported function required by search.tsx
-export const searchHotels = async (params: SearchParams): Promise<HotelSearchResult[]> => {
-  const response = await api.get('/pricing/api/search/', { params });
+  const response = await api.get(`/pricing/api/search/?${queryParams.toString()}`);
   return response.data;
 };
 
-
-// --- Other existing functions ---
-
-// This function now accepts and includes user_id in the request parameters
+// 3. Get Hotel Details
 export const getHotelDetails = async (
     slug: string,
     check_in?: string,
-    duration?: string,
+    duration?: string | number, // Accept string or number
     user_id?: number | null 
 ): Promise<HotelDetails> => {
     const params: { [key: string]: string | number | undefined } = {};
@@ -88,19 +97,37 @@ export const getHotelDetails = async (
     if (duration) params.duration = duration;
     if (user_id) params.user_id = user_id; 
 
-    // FIX: Removed redundant /hotels prefix. Correct path is /api/hotels/<slug>
+    // FIX: Restored correct path
     const response = await api.get<HotelDetails>(`/api/hotels/${slug}/`, { params });
     return response.data;
 };
 
-export const getCities = async () => {
-    // FIX: Removed redundant /hotels prefix. Correct path is /api/hotels/cities/
-    const response = await api.get('/api/hotels/cities/');
-    return response.data;
-}
+// Wrapper for backward compatibility
+export const getAvailableRooms = async (hotelSlug: string, checkIn: string, duration: number): Promise<HotelDetails> => {
+  return getHotelDetails(hotelSlug, checkIn, duration);
+};
 
-export const getAmenities = async () => {
-    // FIX: Removed redundant /hotels prefix. Correct path is /api/hotels/amenities/
-    const response = await api.get('/api/hotels/amenities/');
-    return response.data;
-}
+// 4. Get Price Quote (Single Room)
+export const getPriceQuote = async (data: PriceQuoteInput) => {
+  const response = await api.post('/pricing/api/quote/', data);
+  return response.data;
+};
+
+// 5. Calculate Multi-Room Price (Cart)
+export const calculateMultiPrice = async (data: MultiPriceInput): Promise<MultiPriceData> => {
+  // FIX: Restored correct endpoint from your uploaded file
+  const response = await api.post('/pricing/api/calculate-multi-price/', data);
+  return response.data;
+};
+
+// 6. Get Amenities List
+export const getAmenities = async (): Promise<{ id: number; name: string }[]> => {
+  try {
+      // FIX: Restored correct path
+      const response = await api.get('/api/hotels/amenities/'); 
+      return response.data;
+  } catch (error) {
+      console.warn("Amenities endpoint error, returning empty list.", error);
+      return [];
+  }
+};
