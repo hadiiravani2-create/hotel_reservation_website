@@ -1,14 +1,15 @@
 // src/components/ui/Input.tsx
-// version: 0.0.2
-// Feature: Added 'error' and 'icon' props for use with react-hook-form and visual enhancement.
-// FIX: Applied type assertion during React.cloneElement to allow setting 'size' prop on generic React.ReactElement (icons).
+// version: 0.0.3
+// FIX: Handle 'error' prop safely to prevent '[object Object]' rendering.
+// Support extraction of error message from object (e.g. react-hook-form FieldError).
 
 import React from 'react';
 import { FaExclamationCircle } from 'react-icons/fa'; // Used for generic error icon
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
-  error?: string | null; // Prop to accept error message
+  // OLD: error?: string | null;
+  error?: string | null | any; // Allow object to extract message safely
   icon?: React.ReactElement; // Prop to accept an icon element
 }
 
@@ -19,7 +20,12 @@ export const Input: React.FC<InputProps> = ({
   className = '', 
   ...props 
 }) => {
-  const isError = !!error;
+  // NEW: Safely extract error message string
+  const errorMessage = typeof error === 'object' && error !== null && 'message' in error 
+    ? error.message 
+    : error;
+
+  const isError = !!errorMessage;
   
   // Conditionally set input classes based on error status and icon presence
   const inputClasses = `
@@ -63,7 +69,7 @@ export const Input: React.FC<InputProps> = ({
       {isError && (
         <p className="mt-1 text-xs text-red-600 flex items-center">
             <FaExclamationCircle className="ms-1" size={12} />
-            {error}
+            {errorMessage} {/* Display the string message */}
         </p>
       )}
     </div>

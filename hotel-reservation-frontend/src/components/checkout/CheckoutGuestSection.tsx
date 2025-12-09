@@ -1,3 +1,7 @@
+// src/components/checkout/CheckoutGuestSection.tsx
+// version: 6.0.1
+// Feature: Pass validation errors to GuestInputForm.
+
 import React, { useState } from 'react';
 import { GuestPayload } from '@/api/reservationService';
 import GuestInputForm from '../GuestInputForm';
@@ -8,10 +12,30 @@ interface CheckoutGuestSectionProps {
   guests: Partial<GuestPayload>[];
   onGuestChange: (index: number, data: Partial<GuestPayload>) => void;
   isAuthenticated: boolean;
+  // NEW: Receive all validation errors
+  validationErrors?: Record<string, string>;
 }
 
-const CheckoutGuestSection: React.FC<CheckoutGuestSectionProps> = ({ guests, onGuestChange, isAuthenticated }) => {
+const CheckoutGuestSection: React.FC<CheckoutGuestSectionProps> = ({ 
+    guests, 
+    onGuestChange, 
+    isAuthenticated, 
+    validationErrors = {} 
+}) => {
   const [isGuestDetailsOpen, setGuestDetailsOpen] = useState(false);
+
+  // Helper to extract errors specific to a guest index (e.g., "guest_0_first_name" -> "first_name")
+  const getGuestErrors = (index: number) => {
+    const prefix = `guest_${index}_`;
+    const guestErrors: Record<string, string> = {};
+    Object.keys(validationErrors).forEach(key => {
+        if (key.startsWith(prefix)) {
+            const fieldName = key.replace(prefix, '');
+            guestErrors[fieldName] = validationErrors[key];
+        }
+    });
+    return guestErrors;
+  };
 
   return (
     <div className="p-6 bg-white rounded-xl shadow-lg border border-gray-100 mt-6">
@@ -37,6 +61,7 @@ const CheckoutGuestSection: React.FC<CheckoutGuestSectionProps> = ({ guests, onG
             isPrincipal={true} 
             containerClass="bg-white border-2 border-primary-brand/20 shadow-sm"
             isUnauthenticated={!isAuthenticated}
+            errors={getGuestErrors(0)}
             />
         )}
         
@@ -62,6 +87,7 @@ const CheckoutGuestSection: React.FC<CheckoutGuestSectionProps> = ({ guests, onG
                     isPrincipal={false} 
                     containerClass="bg-gray-50 border border-gray-200"
                     isUnauthenticated={!isAuthenticated}
+                    errors={getGuestErrors(index + 1)}
                     />
                 ))}
                 </div>
