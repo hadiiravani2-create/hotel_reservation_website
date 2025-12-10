@@ -1,32 +1,44 @@
 // src/pages/booking-success-transfer.tsx
-// version: 1.3.0
-// FIX: Updated JalaliDatePicker props to 'value' and 'onChange' to match the component interface.
+// version: 1.5.0
+// REFACTOR: Updated import path for BankCard (moved to /components/payment/) and enhanced UI.
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { DateObject } from "react-multi-date-picker";
-import { fetchBookingDetails, fetchOfflineBanks, submitPaymentConfirmation, BookingDetail, GenericPaymentConfirmationPayload } from '../api/reservationService';
+import { 
+    fetchBookingDetails, 
+    fetchOfflineBanks, 
+    submitPaymentConfirmation, 
+    BookingDetail, 
+    GenericPaymentConfirmationPayload 
+} from '@/api/reservationService';
 import { OfflineBank } from '@/types/hotel';
-import Header from '../components/Header';
-import Footer from '../components/Footer';
-import { Input } from '../components/ui/Input';
-import { Button } from '../components/ui/Button';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
+import { DetailCard } from '@/components/ui/DetailCard'; 
+import { BankCard } from '@/components/payment/BankCard'; // <-- مسیر جدید
+import { formatPrice } from '@/utils/format';
+import { CheckCircle, CreditCard, Receipt, AlertCircle } from 'lucide-react';
 
 const BookingSuccessTransferPage: React.FC = () => {
     const router = useRouter();
     const { booking_code } = router.query;
 
-    const [selectedBank, setSelectedBank] = useState<string>('');
+    const [selectedBankId, setSelectedBankId] = useState<string>('');
     const [trackingCode, setTrackingCode] = useState('');
     const [paymentDate, setPaymentDate] = useState('');
     const [paymentTime, setPaymentTime] = useState('12:00');
 
+    const code = Array.isArray(booking_code) ? booking_code[0] : booking_code;
+
     const { data: booking, isLoading: isLoadingBooking } = useQuery<BookingDetail>({
-        queryKey: ['bookingDetails', booking_code],
-        queryFn: () => fetchBookingDetails(booking_code as string),
-        enabled: !!booking_code,
+        queryKey: ['bookingDetails', code],
+        queryFn: () => fetchBookingDetails(code as string),
+        enabled: !!code,
     });
 
     const { data: banks, isLoading: isLoadingBanks } = useQuery<OfflineBank[]>({
@@ -46,18 +58,13 @@ const BookingSuccessTransferPage: React.FC = () => {
         }
     });
 
-    // REFACTOR: Updated handler signature to match new JalaliDatePicker
     const handleDateChange = (date: DateObject | null) => {
-        if (date) {
-            setPaymentDate(date.format("YYYY-MM-DD"));
-        } else {
-            setPaymentDate("");
-        }
+        setPaymentDate(date ? date.format("YYYY-MM-DD") : "");
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!booking || !selectedBank || !trackingCode || !paymentDate || !paymentTime) {
+        if (!booking || !selectedBankId || !trackingCode || !paymentDate || !paymentTime) {
             alert('لطفا تمام فیلدها را پر کنید.');
             return;
         }
@@ -67,7 +74,7 @@ const BookingSuccessTransferPage: React.FC = () => {
         const payload: GenericPaymentConfirmationPayload = {
             content_type: 'booking',
             object_id: booking.booking_code,
-            offline_bank: parseInt(selectedBank, 10),
+            offline_bank: parseInt(selectedBankId, 10),
             tracking_code: trackingCode,
             payment_date: fullPaymentDateTime,
             payment_amount: booking.total_price,
@@ -75,60 +82,80 @@ const BookingSuccessTransferPage: React.FC = () => {
         mutation.mutate(payload);
     };
 
-    if (isLoadingBooking) {
-        return <div className="text-center p-10">در حال بارگذاری...</div>;
-    }
-
-    if (!booking) {
-        return <div className="text-center p-10 text-red-600">اطلاعات رزرو یافت نشد.</div>;
-    }
+    if (isLoadingBooking || !code) return <><Header /><div className="text-center p-20">در حال بارگذاری...</div><Footer /></>;
+    if (!booking) return <><Header /><div className="text-center p-20 text-red-600 font-bold">اطلاعات رزرو یافت نشد.</div><Footer /></>;
 
     return (
-        <div className="min-h-screen flex flex-col" dir="rtl">
+        <div className="min-h-screen flex flex-col bg-gray-50" dir="rtl">
             <Header />
-            <main className="flex-grow container mx-auto max-w-4xl p-8">
-                <div className="bg-white p-8 rounded-lg shadow-xl border">
-                    {/* ... (Previous JSX content remains unchanged) ... */}
-                    {booking.status !== 'awaiting_confirmation' && (
-                        <>
-                            <h1 className="text-3xl font-extrabold text-green-600 mb-4 text-center">رزرو شما با موفقیت ثبت شد!</h1>
-                            <p className="text-center text-gray-600 mb-8">
-                                کد رزرو شما <strong className="font-mono text-lg">{booking.booking_code}</strong> است. لطفاً برای نهایی‌سازی، مبلغ رزرو را به یکی از حساب‌های زیر واریز کرده و اطلاعات پرداخت را ثبت کنید.
-                            </p>
+            <main className="flex-grow container mx-auto max-w-5xl px-4 py-8">
+                
+                {/* Success Banner */}
+                {booking.status !== 'awaiting_confirmation' && (
+                    <div className="bg-gradient-to-r from-green-600 to-green-500 text-white rounded-2xl p-8 text-center shadow-lg mb-8">
+                        <div className="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
+                            <CheckCircle className="w-10 h-10 text-white" />
+                        </div>
+                        <h1 className="text-3xl font-extrabold mb-2">رزرو اولیه با موفقیت ثبت شد</h1>
+                        <p className="text-green-50 text-lg opacity-90 mb-4">
+                            برای نهایی‌سازی، لطفاً مبلغ رزرو را واریز و شناسه پرداخت را ثبت کنید.
+                        </p>
+                        <div className="flex flex-wrap justify-center gap-4 text-sm font-medium">
+                            <span className="bg-white/10 px-4 py-1 rounded-full border border-white/20">کد رزرو: {booking.booking_code}</span>
+                            <span className="bg-white text-green-700 px-4 py-1 rounded-full shadow-sm font-bold">
+                                مبلغ قابل پرداخت: {formatPrice(booking.total_price)} تومان
+                            </span>
+                        </div>
+                    </div>
+                )}
 
-                            {isLoadingBanks ? <p>در حال بارگذاری اطلاعات بانکی...</p> : (
-                                <div className="bg-gray-50 p-6 rounded-lg mb-8">
-                                    <h3 className="font-bold text-xl mb-4">حساب‌های بانکی جهت واریز وجه</h3>
-                                    <ul className="space-y-4">
-                                        {banks?.map(bank => (
-                                            <li key={bank.id} className="p-3 border rounded-md">
-                                                <p><strong>بانک:</strong> {bank.bank_name}</p>
-                                                <p><strong>صاحب حساب:</strong> {bank.account_holder}</p>
-                                                <p><strong>شماره کارت:</strong> <span className="font-mono">{bank.card_number}</span></p>
-                                                <p><strong>شماره شبا:</strong> <span className="font-mono" dir="ltr">{bank.shaba_number}</span></p>
-                                            </li>
-                                        ))}
-                                    </ul>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    
+                    {/* Left Column: Main Content */}
+                    <div className="lg:col-span-2 space-y-6">
+                        <DetailCard title="مرحله ۱: انتخاب حساب و واریز وجه" icon={CreditCard}>
+                            <p className="text-gray-500 mb-6 text-sm leading-relaxed">
+                                مبلغ رزرو را به یکی از شماره‌کارت‌های زیر (کارت به کارت، پایا یا ساتنا) واریز نمایید و سپس روی کارت حساب مورد نظر کلیک کنید.
+                            </p>
+                            
+                            {isLoadingBanks ? (
+                                <div className="text-center py-10 text-gray-400">در حال دریافت اطلاعات بانکی...</div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-4">
+                                    {banks?.map(bank => (
+                                        <BankCard 
+                                            key={bank.id}
+                                            bank={bank}
+                                            isSelected={selectedBankId === bank.id.toString()}
+                                            onSelect={() => setSelectedBankId(bank.id.toString())}
+                                        />
+                                    ))}
                                 </div>
                             )}
+                        </DetailCard>
 
-                            <form onSubmit={handleSubmit} className="space-y-6">
-                                <h3 className="font-bold text-xl mb-4 border-t pt-6">ثبت اطلاعات پرداخت</h3>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">حساب واریز شده</label>
-                                    <select value={selectedBank} onChange={(e) => setSelectedBank(e.target.value)} required className="w-full h-12 p-3 border border-gray-300 rounded-md">
-                                        <option value="" disabled>یک حساب را انتخاب کنید</option>
-                                        {banks?.map(bank => (
-                                            <option key={bank.id} value={bank.id}>{bank.bank_name} - {bank.card_number}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <Input label="شماره پیگیری فیش" value={trackingCode} onChange={(e) => setTrackingCode(e.target.value)} required />
+                        <DetailCard title="مرحله ۲: ثبت اطلاعات فیش واریزی" icon={Receipt}>
+                             <form onSubmit={handleSubmit} className="space-y-6">
+                                {!selectedBankId && (
+                                    <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-lg flex items-start text-sm">
+                                        <AlertCircle className="w-5 h-5 ml-1 flex-shrink-0 mt-0.5"/>
+                                        <span>لطفاً ابتدا از لیست بالا، حسابی که مبلغ را به آن واریز کرده‌اید انتخاب کنید.</span>
+                                    </div>
+                                )}
                                 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {/* FIX: Using standardized props 'value' and 'onChange' */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="col-span-1 md:col-span-2">
+                                        <Input 
+                                            label="شماره پیگیری / ارجاع" 
+                                            value={trackingCode} 
+                                            onChange={(e) => setTrackingCode(e.target.value)} 
+                                            placeholder="مثال: ۱۲۳۴۵۶"
+                                            required 
+                                        />
+                                    </div>
+
                                     <JalaliDatePicker 
-                                        label="تاریخ پرداخت"
+                                        label="تاریخ واریز"
                                         name="payment_date"
                                         value={paymentDate}
                                         onChange={handleDateChange}
@@ -136,23 +163,46 @@ const BookingSuccessTransferPage: React.FC = () => {
                                         maxDate={new DateObject()}
                                     />
                                     <Input 
-                                        label="ساعت پرداخت"
+                                        label="ساعت واریز"
                                         name="payment_time"
                                         type="time"
                                         value={paymentTime}
                                         onChange={(e) => setPaymentTime(e.target.value)}
                                         required
+                                        dir="ltr"
+                                        className="text-center"
                                     />
                                 </div>
                                 
-                                <div className="text-left">
-                                    <Button type="submit" variant="primary" disabled={mutation.isPending}>
-                                        {mutation.isPending ? 'در حال ثبت...' : 'ثبت و ارسال برای تایید'}
+                                <div className="border-t pt-6 text-left">
+                                    <Button 
+                                        type="submit" 
+                                        className="w-full md:w-auto px-8 py-3 text-lg font-bold shadow-lg shadow-indigo-200"
+                                        disabled={mutation.isPending || !selectedBankId}
+                                    >
+                                        {mutation.isPending ? 'در حال ثبت اطلاعات...' : 'ثبت نهایی پرداخت'}
                                     </Button>
                                 </div>
                             </form>
-                        </>
-                    )}
+                        </DetailCard>
+                    </div>
+
+                    {/* Right Column: Tips (Sidebar) */}
+                    <div className="lg:col-span-1">
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 sticky top-24">
+                            <h3 className="font-bold text-blue-800 mb-4 flex items-center text-lg">
+                                <AlertCircle className="w-5 h-5 ml-2"/>
+                                نکات مهم پرداخت
+                            </h3>
+                            <ul className="text-sm text-blue-800 space-y-4 leading-7 list-disc list-inside marker:text-blue-400">
+                                <li>حتماً <strong>فیش واریزی</strong> را تا زمان تایید نهایی نزد خود نگه دارید.</li>
+                                <li>در صورت واریز از طریق <strong>پایا یا ساتنا</strong>، تایید پرداخت ممکن است در ساعات اداری انجام شود.</li>
+                                <li>مبلغ واریزی باید <strong>دقیقاً</strong> برابر با مبلغ رزرو ({formatPrice(booking.total_price)} تومان) باشد.</li>
+                                <li>پس از ثبت این فرم، وضعیت رزرو شما به <strong>"منتظر تایید"</strong> تغییر می‌کند و همکاران ما در اسرع وقت آن را بررسی می‌کنند.</li>
+                            </ul>
+                        </div>
+                    </div>
+
                 </div>
             </main>
             <Footer />

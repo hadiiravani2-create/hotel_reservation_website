@@ -1,4 +1,9 @@
+// src/components/checkout/CheckoutActions.tsx
+// version: 1.1.0
+// FIX: Imported 'Link' from 'next/link' to resolve ReferenceError. Added target="_blank" to keep user context.
+
 import React from 'react';
+import Link from 'next/link'; // <--- این خط اضافه شد
 import { Button } from '../ui/Button';
 import { CheckCircle, Info } from 'lucide-react';
 
@@ -28,7 +33,12 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({
                 className="mt-1 w-5 h-5 text-primary-brand border-gray-300 rounded focus:ring-primary-brand cursor-pointer" 
             />
             <label htmlFor="rules" className="text-sm text-gray-700 cursor-pointer leading-6 select-none">
-                <span className="font-bold text-gray-900">قوانین و مقررات</span> رزرو هتل را به دقت مطالعه کرده و می‌پذیرم.
+                <span className="font-bold text-gray-900">
+                    <Link href="/booking-rules" target="_blank" className="text-indigo-600 hover:underline mx-1">
+                        قوانین و مقررات
+                    </Link>
+                </span> 
+                رزرو هتل را به دقت مطالعه کرده و می‌پذیرم.
                 مسئولیت صحت اطلاعات وارد شده بر عهده کاربر می‌باشد.
             </label>
         </div>
