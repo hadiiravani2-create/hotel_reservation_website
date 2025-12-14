@@ -1,30 +1,43 @@
 // src/components/HotelCard.tsx
-// version: 2.4.0
-// REFACTOR: Final design with 3-column List view and Price-above-Button layout in Grid view.
+// version: 2.5.0
+// FIX: Added fallback logic to use 'images[0]' if 'main_image' is missing.
+// REFACTOR: Enhanced Grid vs List layout styles for better responsiveness.
 
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { StarIcon, MapPinIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
-import { HotelSummary } from '@/types/hotel';
+import { StarIcon, MapPinIcon } from '@heroicons/react/24/solid';
+import { HotelSummary, HotelDetails } from '@/types/hotel'; // Import HotelDetails for 'images' type
 import { Button } from './ui/Button';
 import { formatPrice, toPersianDigits } from '@/utils/format';
 
 interface HotelCardProps {
-  hotel: HotelSummary;
+  // Accepts both summary and details types to handle different API responses
+  hotel: HotelSummary | HotelDetails | any;
   variant?: 'grid' | 'list';
 }
 
 const HotelCard: React.FC<HotelCardProps> = ({ hotel, variant = 'grid' }) => {
   const router = useRouter();
   
+  // --- 1. Image Resolution Logic ---
   const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-  let imageUrl = hotel.main_image || '/placeholder.png';
+  
+  let rawImage = hotel.main_image;
+  
+  // Fallback: If main_image is missing, try the first image from the gallery
+  if (!rawImage && hotel.images && hotel.images.length > 0) {
+      rawImage = hotel.images[0].image;
+  }
+  
+  // Final Image URL construction
+  let imageUrl = rawImage || '/placeholder.png';
   if (imageUrl.startsWith('/')) {
       imageUrl = `${backendUrl}${imageUrl}`;
   }
 
+  // Query Params persistence
   const queryParams = new URLSearchParams();
   if (router.query.check_in) queryParams.set('check_in', router.query.check_in as string);
   if (router.query.duration) queryParams.set('duration', router.query.duration as string);
@@ -32,79 +45,57 @@ const HotelCard: React.FC<HotelCardProps> = ({ hotel, variant = 'grid' }) => {
   const href = `/hotels/${hotel.slug}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
 
   const renderStars = () => (
-    <div className="flex items-center gap-0.5 bg-black/50 backdrop-blur-md px-2 py-1 rounded-lg">
-      {Array.from({ length: hotel.stars }, (_, i) => (
-        <StarIcon key={i} className="w-3 h-3 text-yellow-400" />
-      ))}
+    <div className="flex text-yellow-400 text-xs">
+      {'★'.repeat(hotel.stars)}
+      <span className="text-gray-300">{'★'.repeat(5 - hotel.stars)}</span>
     </div>
   );
 
-  // --- LIST VIEW (Search Results) ---
-  if (variant === 'list') {
+  // --- 2. Grid Layout (Vertical - for City Page) ---
+  if (variant === 'grid') {
     return (
-      <div className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col md:flex-row mb-6 border border-gray-100 h-full min-h-[200px]">
-        
-        {/* COL 1: Image (Right Side) */}
-        <div className="md:w-3/10 relative flex-shrink-0 h-48 md:h-auto overflow-hidden">
-          <Link href={href} className="block h-full w-full">
+      <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full">
+        {/* Image Top */}
+        <div className="relative h-48 w-full overflow-hidden bg-gray-100">
             <Image
-              src={imageUrl}
-              alt={hotel.name}
-              fill
-              className="object-cover transition-transform duration-700 group-hover:scale-110"
-              sizes="(max-width: 768px) 100vw, 30vw"
+                src={imageUrl}
+                alt={hotel.name}
+                fill
+                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.png'; }}
             />
-            <div className="absolute top-3 right-3 z-10">
+            <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded-md shadow-sm">
                 {renderStars()}
             </div>
-          </Link>
         </div>
 
-        {/* COL 2: Info (Middle) */}
-        <div className="md:w-45/100 p-5 flex flex-col justify-start border-l border-gray-50">
-            <Link href={href}>
-                <h4 className="text-xl font-bold text-gray-800 group-hover:text-primary-brand transition-colors duration-300 mb-2">
+        {/* Content Bottom */}
+        <div className="p-4 flex flex-col flex-grow">
+            <div className="mb-2">
+                <h3 className="font-bold text-gray-800 text-lg line-clamp-1 group-hover:text-blue-600 transition-colors">
                     {hotel.name}
-                </h4>
-            </Link>
-            
-            <div className="flex items-start gap-1 text-sm text-gray-500 mb-4">
-                <MapPinIcon className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0"/>
-                <span className="leading-6">
-                    {hotel.city_name} {hotel.address && `، ${hotel.address}`}
-                </span>
-            </div>
-
-            <div className="mt-auto space-y-1">
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <CheckCircleIcon className="w-3 h-3 text-green-500" />
-                    <span>تایید آنی رزرو</span>
+                </h3>
+                <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                    <MapPinIcon className="w-3 h-3 text-gray-400" />
+                    {hotel.city?.name || hotel.city_name || 'شهر نامشخص'}
                 </div>
             </div>
-        </div>
 
-        {/* COL 3: Price & Action (Left Side) */}
-        <div className="md:w-25/100 p-4 bg-gray-50/50 flex flex-col justify-between items-center text-center border-r border-gray-100">
-            
-            <div className="mt-2 w-full">
-                {hotel.min_price ? (
-                    <div className="flex flex-col items-center">
-                        <span className="text-xs text-gray-400 mb-1">شروع قیمت از</span>
-                        <div className="text-primary-brand font-black text-2xl flex items-center gap-1">
-                            {formatPrice(hotel.min_price)}
-                            <span className="text-xs font-medium text-gray-500">ریال</span>
+            <div className="mt-auto pt-3 border-t border-gray-100 flex items-center justify-between">
+                <div>
+                    <span className="text-xs text-gray-400 block">شروع نرخ</span>
+                    {hotel.min_price ? (
+                        <div className="text-primary-brand font-bold text-base">
+                            {formatPrice(hotel.min_price)} <span className="text-[10px] text-gray-500 font-normal">ریال</span>
                         </div>
-                        <span className="text-[10px] text-gray-400 mt-1">برای ۱ شب</span>
-                    </div>
-                ) : (
-                    <span className="text-gray-400 text-sm bg-white px-3 py-1 rounded-full border">قیمت نامشخص</span>
-                )}
-            </div>
-
-            <div className="w-full mt-4">
-                <Link href={href} className="w-full block">
-                    <Button className="w-full rounded-xl shadow-md hover:shadow-lg transition-all py-2.5 text-sm">
-                        مشاهده و رزرو
+                    ) : (
+                        <span className="text-xs text-gray-400 font-medium">استعلام قیمت</span>
+                    )}
+                </div>
+                
+                <Link href={href}>
+                    <Button variant="outline" className="text-xs py-2 px-3 !rounded-lg hover:bg-blue-50">
+                        مشاهده
                     </Button>
                 </Link>
             </div>
@@ -113,58 +104,62 @@ const HotelCard: React.FC<HotelCardProps> = ({ hotel, variant = 'grid' }) => {
     );
   }
 
-  // --- GRID VIEW (Homepage / Search Grid) ---
+  // --- 3. List Layout (Horizontal - for Search Page) ---
   return (
-    <Link href={href} className="group block h-full">
-      <div className="bg-white rounded-2xl shadow-md hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 overflow-hidden h-full flex flex-col border border-gray-100 relative">
-        
-        {/* Image Section */}
-        <div className="relative w-full aspect-[4/3] overflow-hidden">
+    <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col sm:flex-row">
+      {/* Image Left */}
+      <div className="relative h-48 sm:h-auto sm:w-1/3 min-w-[240px] bg-gray-100">
           <Image
-            src={imageUrl}
-            alt={hotel.name}
-            fill
-            className="object-cover transition-transform duration-700 group-hover:scale-110"
-            sizes="(max-width: 768px) 100vw, 33vw"
+              src={imageUrl}
+              alt={hotel.name}
+              fill
+              className="object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.png'; }}
           />
-          {/* Dark Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90 group-hover:opacity-70 transition-opacity"/>
-          
-          <div className="absolute top-3 right-3">{renderStars()}</div>
+          <div className="absolute top-3 right-3 bg-white/95 px-2 py-1 rounded-full shadow-sm">
+              {renderStars()}
+          </div>
+      </div>
 
-          {/* Title & Location */}
-          <div className="absolute bottom-4 right-4 left-4 text-white">
-              <h3 className="text-lg font-bold mb-1 shadow-black/50 drop-shadow-md truncate">
+      {/* Content Right */}
+      <div className="p-5 flex flex-col flex-grow justify-between">
+          <div>
+              <h3 className="font-bold text-xl text-gray-800 mb-2 group-hover:text-blue-600 transition-colors">
                   {hotel.name}
               </h3>
-              <p className="text-xs text-gray-200 flex items-center gap-1">
-                 <MapPinIcon className="w-3 h-3"/>
-                 {hotel.city_name}
-              </p>
+              <div className="flex items-center gap-1 text-sm text-gray-500 mb-4">
+                  <MapPinIcon className="w-4 h-4 text-gray-400" />
+                  {hotel.address || hotel.city?.name || hotel.city_name}
+              </div>
+              
+              {/* Optional: Add amenities preview here if available in hotel object */}
           </div>
-        </div>
-        
-        {/* Footer Content */}
-        <div className="p-4 flex flex-col gap-3 bg-white">
-            {/* Price Row */}
-            <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-500">شروع نرخ:</span>
-                {hotel.min_price ? (
-                    <div className="text-primary-brand font-bold text-lg">
-                        {formatPrice(hotel.min_price)} <span className="text-[10px] text-gray-500 font-normal">ریال</span>
-                    </div>
-                ) : (
-                    <span className="text-xs text-gray-400">نامشخص</span>
-                )}
-            </div>
 
-            {/* Button Row */}
-            <Button variant="primary" className="w-full rounded-xl py-2.5 text-sm shadow-md group-hover:shadow-lg transition-all">
-                مشاهده و رزرو
-            </Button>
-        </div>
+          <div className="flex items-end justify-between border-t border-gray-100 pt-4 mt-2">
+              <div className="flex flex-col">
+                  {hotel.min_price ? (
+                      <>
+                          <span className="text-xs text-gray-500 mb-1">قیمت برای ۱ شب:</span>
+                          <div className="text-2xl font-bold text-primary-brand">
+                              {formatPrice(hotel.min_price)}
+                              <span className="text-xs font-normal text-gray-500 mr-1">ریال</span>
+                          </div>
+                      </>
+                  ) : (
+                      <span className="text-sm text-gray-400 font-medium bg-gray-50 px-2 py-1 rounded">
+                          نیازمند استعلام
+                      </span>
+                  )}
+              </div>
+
+              <Link href={href} className="w-full sm:w-auto">
+                  <Button variant="primary" className="w-full sm:w-auto px-8 py-3 shadow-lg shadow-blue-500/20">
+                      رزرو آنلاین
+                  </Button>
+              </Link>
+          </div>
       </div>
-    </Link>
+    </div>
   );
 };
 

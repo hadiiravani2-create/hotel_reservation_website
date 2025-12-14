@@ -95,6 +95,8 @@ export interface City {
     slug: string;
     description: string | null;
     image: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
 }
 
 export interface HotelCategory {
