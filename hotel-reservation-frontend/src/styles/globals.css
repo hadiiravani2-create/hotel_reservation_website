@@ -27,3 +27,35 @@ body {
 .testclass {
   color :red;
 }
+
+/* استایل‌های سفارشی برای تقویم قیمت اتاق */
+.room-calendar-wrapper .rmdp-day span {
+    display: block !important;
+    position: static !important;
+    transform: none !important;
+}
+
+.room-calendar-wrapper .rmdp-day {
+    height: 65px !important; /* ارتفاع بیشتر برای جا شدن قیمت */
+    width: 65px !important;
+    border: 1px solid #f0f0f0; /* خطوط جدول */
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+.room-calendar-wrapper .rmdp-week-day {
+    color: #666;
+    font-weight: bold;
+}
+
+/* رنگ روزهای غیرفعال/تکمیل */
+.room-calendar-wrapper .rmdp-day.rmdp-disabled {
+    background-color: #f9fafb !important;
+}
+
+/* هاور روی روزهای فعال */
+.room-calendar-wrapper .rmdp-day:not(.rmdp-disabled):hover {
+    background-color: #eff6ff !important;
+    border: 1px solid #3b82f6 !important;
+}
