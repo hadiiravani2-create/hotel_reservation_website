@@ -89,6 +89,21 @@ export interface HotelImage {
     order: number;
 }
 
+export interface CityAttraction {
+    id: number;
+    name: string;
+    slug: string;
+    description: string;
+    latitude: number;
+    longitude: number;
+    images: {
+        image: string;
+        caption: string | null;
+        order: number;
+        is_cover: boolean;
+    }[];
+}
+
 export interface City {
     id: number;
     name: string;
@@ -97,6 +112,7 @@ export interface City {
     image: string | null;
     latitude?: number | null;
     longitude?: number | null;
+    attractions?: CityAttraction[];
 }
 
 export interface HotelCategory {
@@ -114,6 +130,8 @@ export interface BoardType {
 export interface PricedBoardType {
   board_type: BoardType;
   total_price: number;
+  total_extra_adult_price?: number;
+  total_child_price?: number;
 }
 
 export interface BedType {

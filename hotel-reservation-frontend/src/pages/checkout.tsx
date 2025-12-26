@@ -38,6 +38,7 @@ const CheckoutPage: React.FC = () => {
     const [rulesAccepted, setRulesAccepted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [validationErrors, setValidationErrors] = useState<any>({});
 
     // Services State
     const [selectedServices, setSelectedServices] = useState<SelectedServicePayload[]>([]);
@@ -116,22 +117,40 @@ const CheckoutPage: React.FC = () => {
         onSuccess: (data) => {
             localStorage.removeItem('bookingCart');
             if (data.payment_type === 'offline') {
+                 // Offline hotel flow (awaiting confirmation)
                  router.push(`/booking-success-transfer?booking_code=${data.booking_code}`);
             } else {
+                 // Online hotel flow (payment page)
                  router.push(`/payment/${data.booking_code}`);
             }
-        },
+        },            
+    
         onError: (error: any) => {
             console.error("Booking Error:", error);
             let errorMessage = 'خطا در ثبت رزرو. لطفاً مجدداً تلاش کنید.';
             const errorData = error.response?.data;
 
             if (errorData) {
+                // [GEM-UPDATE] - Capture structured errors
+                if (typeof errorData === 'object' && !errorData.error && !errorData.detail) {
+                    setValidationErrors(errorData);
+                } else {
+                    setValidationErrors({});
+                }
+
+                // Determine general error message
                 if (typeof errorData === 'string') errorMessage = errorData;
                 else if (errorData.error) errorMessage = errorData.error;
+                else if (errorData.detail) errorMessage = errorData.detail;
                 else if (typeof errorData === 'object') {
-                     const values = Object.values(errorData).flat();
-                     if (values.length > 0) errorMessage = String(values[0]);
+                     // If it's a validation error object
+                     if (errorData.non_field_errors) {
+                         errorMessage = Array.isArray(errorData.non_field_errors) 
+                            ? errorData.non_field_errors.join(' ') 
+                            : String(errorData.non_field_errors);
+                     } else {
+                         errorMessage = 'لطفاً اطلاعات فرم را بررسی و خطاهای مشخص شده را اصلاح کنید.';
+                     }
                 }
             }
             setError(errorMessage);
@@ -143,7 +162,7 @@ const CheckoutPage: React.FC = () => {
     const handleGuestChange = useCallback((index: number, data: Partial<GuestPayload>) => {
         setGuests(prev => prev.map((guest, i) => i === index ? { ...guest, ...data } : guest));
     }, []);
-    
+   
     const handleSelectService = useCallback((servicePayload: SelectedServicePayload) => {
         setSelectedServices(prev => [...prev.filter(s => s.id !== servicePayload.id), servicePayload]);
     }, []);
@@ -229,7 +248,8 @@ const CheckoutPage: React.FC = () => {
                         <CheckoutGuestSection 
                             guests={guests} 
                             onGuestChange={handleGuestChange} 
-                            isAuthenticated={!!isAuthenticated} 
+                            isAuthenticated={!!isAuthenticated}
+			    validationErrors={validationErrors} 
                         />
 
                         <CheckoutActions 

@@ -13,6 +13,15 @@ import { DATE_CONFIG } from "@/config/date";
 // Ensure you have created this utility file as requested previously
 import { toPersianDigits } from "@/utils/format"; 
 
+const createDateObj = (dateStr: string) => {
+    return new DateObject({
+        date: dateStr,
+        format: "YYYY-MM-DD",
+        calendar: DATE_CONFIG.calendar,
+        locale: DATE_CONFIG.locale
+    });
+};
+
 const getToday = () => new DateObject({ calendar: DATE_CONFIG.calendar, locale: DATE_CONFIG.locale }).format("YYYY-MM-DD");
 const getTomorrow = () => new DateObject({ calendar: DATE_CONFIG.calendar, locale: DATE_CONFIG.locale }).add(1, "day").format("YYYY-MM-DD");
 
@@ -85,13 +94,14 @@ const SearchForm = () => {
             return;
         }
 
-        // FIX: Construct URL strictly as requested: city_id=X&check_in=YYYY-MM-DD(Persian)&duration=N
+        // اصلاح شده: ارسال همان تاریخ شمسی موجود در State
+        // نیازی به تبدیل به میلادی نیست، چون بک‌ند اکنون تاریخ شمسی را می‌فهمد.
         router.push({
             pathname: '/search',
             query: {
                 city_id: searchData.city_id,
-                check_in: toPersianDigits(searchData.check_in), // Convert Date to Persian Digits
-                duration: duration // Send Duration instead of check_out
+                check_in: searchData.check_in, // ارسال تاریخ شمسی (مثلاً 1403-10-06)
+                duration: duration 
             }
         });
     };
@@ -133,7 +143,7 @@ const SearchForm = () => {
                         name="check_in"
                         value={searchData.check_in}
                         onChange={(date) => handleDateChange(date, "check_in")}
-                        minDate={new DateObject()} // FIX: Disable past dates
+                        minDate={new DateObject()}
                         required
                     />
                 </div>
@@ -145,7 +155,7 @@ const SearchForm = () => {
                         name="check_out"
                         value={searchData.check_out}
                         onChange={(date) => handleDateChange(date, "check_out")}
-                        minDate={searchData.check_in} // FIX: Disable dates before check-in
+                        minDate={createDateObj(searchData.check_in)}
                         required
                     />
                     {errors.check_out && <p className="text-red-500 text-xs mt-1">{errors.check_out}</p>}

@@ -1,6 +1,6 @@
 // src/components/checkout/CheckoutGuestSection.tsx
-// version: 6.0.1
-// Feature: Pass validation errors to GuestInputForm.
+// version: 6.2.1
+// FIX: Ensure file is properly closed with braces to resolve export error.
 
 import React, { useState } from 'react';
 import { GuestPayload } from '@/api/reservationService';
@@ -12,8 +12,7 @@ interface CheckoutGuestSectionProps {
   guests: Partial<GuestPayload>[];
   onGuestChange: (index: number, data: Partial<GuestPayload>) => void;
   isAuthenticated: boolean;
-  // NEW: Receive all validation errors
-  validationErrors?: Record<string, string>;
+  validationErrors?: any; 
 }
 
 const CheckoutGuestSection: React.FC<CheckoutGuestSectionProps> = ({ 
@@ -24,17 +23,12 @@ const CheckoutGuestSection: React.FC<CheckoutGuestSectionProps> = ({
 }) => {
   const [isGuestDetailsOpen, setGuestDetailsOpen] = useState(false);
 
-  // Helper to extract errors specific to a guest index (e.g., "guest_0_first_name" -> "first_name")
+  // Helper to extract errors specific to a guest index
   const getGuestErrors = (index: number) => {
-    const prefix = `guest_${index}_`;
-    const guestErrors: Record<string, string> = {};
-    Object.keys(validationErrors).forEach(key => {
-        if (key.startsWith(prefix)) {
-            const fieldName = key.replace(prefix, '');
-            guestErrors[fieldName] = validationErrors[key];
-        }
-    });
-    return guestErrors;
+    if (validationErrors?.guests && Array.isArray(validationErrors.guests)) {
+        return validationErrors.guests[index] || {};
+    }
+    return {};
   };
 
   return (

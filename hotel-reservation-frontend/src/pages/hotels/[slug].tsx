@@ -23,6 +23,7 @@ import HotelGallery from '@/components/hotel-detail/HotelGallery';
 import HotelInfoSummary from '@/components/hotel-detail/HotelInfoSummary';
 import HotelDescription from '@/components/hotel-detail/HotelDescription';
 import HotelRoomList from '@/components/hotel-detail/HotelRoomList';
+import HotelDistances from '@/components/hotel-detail/HotelDistances';
 
 interface HotelPageProps {
   hotel: HotelDetails;
@@ -112,10 +113,17 @@ const HotelDetailPage = ({ hotel, initialRooms }: HotelPageProps) => {
               {/* 3. Info Summary (Check-in/out) */}
               <HotelInfoSummary checkInTime={hotel.check_in_time} checkOutTime={hotel.check_out_time} />
 
-              {/* 4. Description */}
+	      {/* 4. Distances Section */}
+	      <HotelDistances
+                  hotelLat={hotel.latitude}
+                  hotelLng={hotel.longitude}
+                  attractions={hotel.city?.attractions || []}
+              />
+
+              {/* 5. Description */}
               <HotelDescription description={hotel.description} />
 
-              {/* 5. Room List */}
+              {/* 6. Room List */}
               <HotelRoomList 
                 rooms={availableRooms}
                 isLoading={isLoading}

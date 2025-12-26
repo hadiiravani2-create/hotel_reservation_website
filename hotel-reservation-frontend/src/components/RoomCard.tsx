@@ -1,11 +1,12 @@
 // src/components/RoomCard.tsx
-// version: 2.2.1
-// DEBUG: Added console logs to inspect 'extra_adult_price' value.
+// version: 3.2.0
+// FIX: Prioritize backend-calculated total prices for accurate child/adult costs.
+// FEATURES: Quantity selector, Loading state, Safe math.
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { AvailableRoom, CartItem, PricedBoardType } from '@/types/hotel';
-import { Users, BedDouble, UserPlus, Baby, PlusCircle } from 'lucide-react';
+import { Users, BedDouble, UserPlus, Baby, PlusCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { formatPrice, toPersianDigits } from '@/utils/format';
 
@@ -18,52 +19,74 @@ interface RoomCardProps {
 }
 
 const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reservedCount, hotelId }) => {
-  const quantity = 1;
-  
+  // State for user selections
   const [selectedBoard, setSelectedBoard] = useState<PricedBoardType | null>(null);
   const [extraAdults, setExtraAdults] = useState<number>(0);
   const [childrenCount, setChildrenCount] = useState<number>(0);
+  const [quantity, setQuantity] = useState<number>(1);
+  
+  // State for UI feedback
+  const [isAdding, setIsAdding] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
+  // Initialize selected board safely (prevent unwanted resets)
   useEffect(() => {
     if (room.priced_board_types && room.priced_board_types.length > 0) {
-      setSelectedBoard(room.priced_board_types[0]);
+      setSelectedBoard(prev => {
+        // If we already have a selection that is still valid, keep it.
+        if (prev && room.priced_board_types.some(b => b.board_type.id === prev.board_type.id)) {
+          // Update the price info (in case backend recalculated it), but keep user selection
+          const updated = room.priced_board_types.find(b => b.board_type.id === prev.board_type.id);
+          return updated || prev;
+        }
+        // Otherwise, default to the first available option
+        return room.priced_board_types[0];
+      });
     }
   }, [room.priced_board_types]);
 
   const maxExtraAdults = room.extra_capacity || 0;
   const maxChildren = room.child_capacity || 0;
+  const maxAvailableQuantity = Math.max(0, room.availability_quantity - reservedCount);
 
-  // Logic: Dynamic Price Calculation
-  const finalPrice = useMemo(() => {
+  // Logic: Exact Price Calculation
+  const finalPricePerRoom = useMemo(() => {
     if (!selectedBoard) return 0;
     
-    let baseTotal = Number(selectedBoard.total_price);
+    // 1. Base Price (Total for duration is already calculated by backend)
+    const baseTotal = Number(selectedBoard.total_price) || 0;
+    
+    // 2. Extra Costs calculation
     let extrasTotal = 0;
 
-    // --- DEBUG LOGGING ---
-    console.log(`[Room: ${room.name}] DEBUG PRICE CALCULATION:`);
-    console.log('Base Price:', baseTotal);
-    console.log('Extra Adult Price (Raw):', room.extra_adult_price);
-    console.log('Child Price (Raw):', room.child_price);
-    // ---------------------
-
-    // Add extra adults cost
     if (extraAdults > 0) {
-        // Fallback to 0 if price is missing/invalid to avoid NaN or weird logic
-        const price = room.extra_adult_price ? Number(room.extra_adult_price) : 0;
-        console.log(`Adding Adults: ${extraAdults} * ${price} * ${duration}`);
-        extrasTotal += (extraAdults * price * duration);
+        let adultTotalForDuration = 0;
+        // Check if backend provided the exact total for this specific board
+        if (selectedBoard.total_extra_adult_price !== undefined) {
+            adultTotalForDuration = Number(selectedBoard.total_extra_adult_price);
+        } else {
+            // Fallback for backward compatibility
+            const avgPrice = room.extra_adult_price ? Number(room.extra_adult_price) : 0;
+            adultTotalForDuration = avgPrice * duration;
+        }
+        extrasTotal += (extraAdults * adultTotalForDuration);
     }
     
-    // Add children cost
     if (childrenCount > 0) {
-        const price = room.child_price ? Number(room.child_price) : 0;
-        console.log(`Adding Children: ${childrenCount} * ${price} * ${duration}`);
-        extrasTotal += (childrenCount * price * duration);
+        let childTotalForDuration = 0;
+        // Check if backend provided the exact total for this specific board
+        if (selectedBoard.total_child_price !== undefined) {
+            childTotalForDuration = Number(selectedBoard.total_child_price);
+        } else {
+            // Fallback
+            const avgPrice = room.child_price ? Number(room.child_price) : 0;
+            childTotalForDuration = avgPrice * duration;
+        }
+        extrasTotal += (childrenCount * childTotalForDuration);
     }
 
     return baseTotal + extrasTotal;
-  }, [selectedBoard, extraAdults, childrenCount, room.extra_adult_price, room.child_price, duration, room.name]);
+  }, [selectedBoard, extraAdults, childrenCount, room.extra_adult_price, room.child_price, duration]);
 
   const handleAddToCart = () => {
     if (!selectedBoard) {
@@ -71,42 +94,54 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reserv
       return;
     }
     
-    const unitPrice = finalPrice; 
+    if (quantity > maxAvailableQuantity) {
+        alert("تعداد درخواستی بیشتر از ظرفیت موجود است.");
+        return;
+    }
 
-    const cartItem: CartItem = {
-      id: `${room.id}-${selectedBoard.board_type.id}-${Date.now()}`,
-      room: {
-        id: room.id,
-        name: room.name,
-        image: room.images && room.images.length > 0 ? room.images[0] : null,
-        base_capacity: room.base_capacity,
-        extra_capacity: room.extra_capacity,
-        child_capacity: room.child_capacity,
-        hotel_id: hotelId,
-        extra_adult_price: room.extra_adult_price,
-        child_price: room.child_price
-      },
-      selected_board: {
-        id: selectedBoard.board_type.id,
-        name: selectedBoard.board_type.name,
-      },
-      quantity: quantity,
-      price_per_room: unitPrice,
-      total_price: unitPrice * quantity,
-      extra_adults: extraAdults,
-      children_count: childrenCount
-    };
+    setIsAdding(true);
 
-    onAddToCart(cartItem);
+    setTimeout(() => {
+        const cartItem: CartItem = {
+          id: `${room.id}-${selectedBoard.board_type.id}-${Date.now()}`,
+          room: {
+            id: room.id,
+            name: room.name,
+            image: room.images && room.images.length > 0 ? room.images[0] : null,
+            base_capacity: room.base_capacity,
+            extra_capacity: room.extra_capacity,
+            child_capacity: room.child_capacity,
+            hotel_id: hotelId,
+            // These static prices are just for reference in cart, actual calculation was done above
+            extra_adult_price: room.extra_adult_price,
+            child_price: room.child_price
+          },
+          selected_board: {
+            id: selectedBoard.board_type.id,
+            name: selectedBoard.board_type.name,
+          },
+          quantity: quantity,
+          price_per_room: finalPricePerRoom,
+          total_price: finalPricePerRoom * quantity,
+          extra_adults: extraAdults,
+          children_count: childrenCount
+        };
+
+        onAddToCart(cartItem);
+        
+        setIsAdding(false);
+        setIsSuccess(true);
+        setTimeout(() => setIsSuccess(false), 2000);
+        setQuantity(1);
+    }, 500);
   };
 
   const roomImage = room.images && room.images.length > 0 ? room.images[0].image : '/placeholder.png';
-  const maxAvailableQuantity = room.availability_quantity - reservedCount;
 
   return (
     <div className="flex flex-col md:flex-row gap-4 border rounded-lg overflow-hidden shadow-sm mb-6 bg-white transition-all duration-300 hover:shadow-lg hover:border-blue-200">
       
-      {/* Column 1: Image (20%) */}
+      {/* Column 1: Image */}
       <div className="w-full md:w-1/5 flex-shrink-0 relative min-h-[200px] md:min-h-0">
          <Image 
             src={roomImage} 
@@ -116,7 +151,7 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reserv
           />
       </div>
 
-      {/* Column 2: Details & Selectors (50%) */}
+      {/* Column 2: Details & Selectors */}
       <div className="w-full md:w-1/2 p-4 flex flex-col justify-between">
         <div>
           <h3 className="text-xl font-bold text-gray-800">{room.name}</h3>
@@ -136,7 +171,7 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reserv
           <p className="text-sm text-gray-500 mt-3 border-t pt-3 line-clamp-2">{room.description}</p>
         </div>
         
-        {/* INLINE SELECTORS & BOARD */}
+        {/* Controls Section */}
         <div className="mt-4 space-y-4">
             
             {/* Board Selection */}
@@ -161,7 +196,7 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reserv
 
             {/* Extra Guests Selectors */}
             {(maxExtraAdults > 0 || maxChildren > 0) && (
-                <div className="flex gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                <div className="flex flex-wrap gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
                     {maxExtraAdults > 0 && (
                         <div className="flex items-center gap-2">
                             <UserPlus className="w-4 h-4 text-gray-400" />
@@ -179,7 +214,7 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reserv
                     )}
                     
                     {maxChildren > 0 && (
-                        <div className="flex items-center gap-2 border-r pr-4 border-gray-200">
+                        <div className="flex items-center gap-2 border-r pr-3 border-gray-200 mr-2">
                             <Baby className="w-4 h-4 text-gray-400" />
                             <span className="text-xs text-gray-600">کودک:</span>
                             <select 
@@ -198,15 +233,22 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reserv
         </div>
       </div>
 
-      {/* Column 3: Pricing and Actions (30%) */}
+      {/* Column 3: Pricing and Actions */}
       <div className="w-full md:w-3/10 p-4 bg-gray-50/50 flex flex-col justify-center items-center text-center border-t md:border-r md:border-t-none">
         <p className="text-xs text-gray-500">قیمت برای {toPersianDigits(duration)} شب</p>
         
         {/* Dynamic Price Display */}
-        <p className="font-extrabold text-2xl text-primary-brand my-2">
-          {finalPrice > 0 ? formatPrice(finalPrice) : 'نامشخص'}
-          <span className="text-sm font-normal text-gray-600 mr-1">ریال</span>
-        </p>
+        <div className="my-2">
+            <p className="font-extrabold text-2xl text-primary-brand">
+            {finalPricePerRoom > 0 ? formatPrice(finalPricePerRoom) : 'نامشخص'}
+            <span className="text-sm font-normal text-gray-600 mr-1">ریال</span>
+            </p>
+            {quantity > 1 && (
+                <p className="text-xs text-gray-500 mt-1">
+                    مجموع: {formatPrice(finalPricePerRoom * quantity)} ریال
+                </p>
+            )}
+        </div>
         
         {(extraAdults > 0 || childrenCount > 0) && (
             <p className="text-[10px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full mb-2">
@@ -217,10 +259,46 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, duration, onAddToCart, reserv
         {maxAvailableQuantity <= 0 ? (
             <p className="text-sm text-red-500 font-bold mt-2 bg-red-50 px-3 py-1 rounded">ظرفیت تکمیل است</p>
         ) : (
-            <Button onClick={handleAddToCart} className="w-full mt-4 flex items-center justify-center gap-2 shadow-md py-3">
-              <PlusCircle className="w-5 h-5" />
-              افزودن به سبد
-            </Button>
+            <div className="w-full mt-4 space-y-3">
+                {/* Quantity Selector */}
+                <div className="flex items-center justify-center gap-2 text-sm">
+                    <span className="text-gray-600">تعداد اتاق:</span>
+                    <select 
+                        value={quantity}
+                        onChange={(e) => setQuantity(Number(e.target.value))}
+                        className="border rounded px-2 py-1 bg-white outline-none focus:border-blue-500"
+                    >
+                        {Array.from({ length: Math.min(5, maxAvailableQuantity) }, (_, i) => (
+                            <option key={i + 1} value={i + 1}>{toPersianDigits(i + 1)}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <Button 
+                    onClick={handleAddToCart} 
+                    className={`w-full flex items-center justify-center gap-2 shadow-md py-3 transition-colors ${
+                        isSuccess ? 'bg-green-600 hover:bg-green-700 border-green-600' : ''
+                    }`}
+                    disabled={isAdding}
+                >
+                    {isAdding ? (
+                        <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span>در حال افزودن...</span>
+                        </>
+                    ) : isSuccess ? (
+                        <>
+                            <CheckCircle className="w-5 h-5" />
+                            <span>اضافه شد</span>
+                        </>
+                    ) : (
+                        <>
+                            <PlusCircle className="w-5 h-5" />
+                            <span>افزودن به سبد</span>
+                        </>
+                    )}
+                </Button>
+            </div>
         )}
         
         {maxAvailableQuantity > 0 && maxAvailableQuantity <= 3 && (
