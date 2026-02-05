@@ -1,9 +1,10 @@
 // src/pages/track-booking.tsx
-// version: 1.2.3
-// FIX: Replaced 'detail.customer_name' with data from 'detail.guests' array to fix TypeScript error.
+// version: 2.1.0
+// FEATURE: Auto-execute search if 'code' and 'nid' params exist in URL.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NextPage } from 'next';
+import { useRouter } from 'next/router'; // [NEW] Import router
 import { useMutation } from '@tanstack/react-query';
 import {
     guestBookingLookup,
@@ -18,6 +19,10 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { FaFilePdf, FaHotel, FaCalendarAlt, FaUser, FaBed, FaMoneyBillWave } from 'react-icons/fa';
 import { toPersianDigits, formatPrice } from '@/utils/format';
+
+// ... (توابع کمکی getStatusBadge و کامپوننت BookingDetailView بدون تغییر باقی می‌مانند) ...
+// برای کوتاه شدن پاسخ، کدهای تکراری بالای فایل را اینجا نمی‌آورم. 
+// لطفا کدهای getStatusBadge و BookingDetailView را از فایل قبلی حفظ کنید.
 
 const getStatusBadge = (status: BookingStatus) => {
     const styles: Record<string, string> = {
@@ -47,8 +52,6 @@ const getStatusBadge = (status: BookingStatus) => {
     );
 };
 
-// --- Sub-Component: Booking Detail View ---
-
 interface BookingDetailViewProps {
     detail: BookingDetail;
     guestIdCode: string;
@@ -64,14 +67,12 @@ const BookingDetailView: React.FC<BookingDetailViewProps> = ({ detail, guestIdCo
         }
     };
 
-    // FIX: Extract main guest name from the guests array
     const mainGuestName = detail.guests && detail.guests.length > 0
         ? `${detail.guests[0].first_name} ${detail.guests[0].last_name}`
         : 'نامشخص';
 
     return (
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden mt-8 animate-fade-in-up">
-            {/* Card Header */}
             <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -83,19 +84,14 @@ const BookingDetailView: React.FC<BookingDetailViewProps> = ({ detail, guestIdCo
                 {getStatusBadge(detail.status)}
             </div>
 
-            {/* Card Body - Grid Layout */}
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8">
-                {/* Guest Name */}
                 <div className="flex items-start gap-3">
                     <div className="mt-1 bg-blue-50 p-2 rounded-lg text-blue-600"><FaUser /></div>
                     <div>
                         <p className="text-sm text-gray-500 mb-1">نام مهمان</p>
-                        {/* FIX: Use the calculated name variable */}
                         <p className="font-medium text-gray-800">{mainGuestName}</p>
                     </div>
                 </div>
-
-                {/* Dates */}
                 <div className="flex items-start gap-3">
                     <div className="mt-1 bg-blue-50 p-2 rounded-lg text-blue-600"><FaCalendarAlt /></div>
                     <div>
@@ -105,8 +101,6 @@ const BookingDetailView: React.FC<BookingDetailViewProps> = ({ detail, guestIdCo
                         </p>
                     </div>
                 </div>
-
-                {/* Rooms */}
                 <div className="flex items-start gap-3">
                     <div className="mt-1 bg-blue-50 p-2 rounded-lg text-blue-600"><FaBed /></div>
                     <div>
@@ -120,8 +114,6 @@ const BookingDetailView: React.FC<BookingDetailViewProps> = ({ detail, guestIdCo
                         </ul>
                     </div>
                 </div>
-
-                {/* Price */}
                 <div className="flex items-start gap-3">
                     <div className="mt-1 bg-blue-50 p-2 rounded-lg text-blue-600"><FaMoneyBillWave /></div>
                     <div>
@@ -133,13 +125,8 @@ const BookingDetailView: React.FC<BookingDetailViewProps> = ({ detail, guestIdCo
                 </div>
             </div>
 
-            {/* Card Footer - Actions */}
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-                <Button 
-                    onClick={handleDownloadPdf} 
-                    variant="outline" 
-                    className="flex items-center gap-2 text-sm hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                >
+                <Button onClick={handleDownloadPdf} variant="outline" className="flex items-center gap-2 text-sm hover:bg-blue-50 hover:text-blue-600 transition-colors">
                     <FaFilePdf className="text-red-500" />
                     دانلود واچر (PDF)
                 </Button>
@@ -148,15 +135,52 @@ const BookingDetailView: React.FC<BookingDetailViewProps> = ({ detail, guestIdCo
     );
 };
 
-// --- Main Page Component ---
+// --- Main Page Component (UPDATED) ---
 
 const TrackBooking: NextPage = () => {
+    const router = useRouter(); // [NEW] استفاده از روتر
+    
+    // State
     const [bookingCode, setBookingCode] = useState('');
     const [idNumber, setIdNumber] = useState('');
+    
+    // فلگ برای جلوگیری از درخواست تکراری در React Strict Mode
+    const [hasAutoSearched, setHasAutoSearched] = useState(false);
 
     const { mutate, isPending, data: bookingDetail, isSuccess, error } = useMutation({
         mutationFn: (payload: GuestLookupPayload) => guestBookingLookup(payload),
     });
+
+    // [NEW LOGIC]: Auto-Fill and Auto-Submit based on URL Query
+    useEffect(() => {
+        // صبر می‌کنیم تا روتر آماده شود
+        if (!router.isReady) return;
+        
+        // اگر قبلاً جستجو کرده‌ایم، دوباره انجام نده
+        if (hasAutoSearched) return;
+
+        const { code, nid } = router.query;
+
+        // اگر هر دو پارامتر وجود داشتند
+        if (code && nid) {
+            const codeStr = code as string;
+            const nidStr = nid as string;
+
+            // 1. پر کردن استیت‌ها (برای نمایش در اینپوت‌ها)
+            setBookingCode(codeStr);
+            setIdNumber(nidStr);
+            
+            // 2. اجرای خودکار جستجو
+            mutate({ 
+                booking_code: codeStr, 
+                national_id: nidStr, 
+                passport_number: null 
+            });
+            
+            // 3. تنظیم فلگ برای جلوگیری از تکرار
+            setHasAutoSearched(true);
+        }
+    }, [router.isReady, router.query, mutate, hasAutoSearched]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -168,7 +192,7 @@ const TrackBooking: NextPage = () => {
     };
 
     return (
-        <div className="min-h-screen flex flex-col bg-gray-50 font-sans" dir="rtl">
+        <div className="min-h-screen flex flex-col bg-gray-50" dir="rtl">
             <Header />
             
             <main className="flex-grow container mx-auto px-4 py-12">

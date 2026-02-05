@@ -1,14 +1,18 @@
-// src/pages/register.tsx v1.0.4
+// src/pages/register.tsx
+// version: 2.0.0
+// FEATURE: Replaced Username with Mobile Number.
+// FEATURE: Implemented Auto-Login after successful registration.
+
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import Link from 'next/link'; // Import Link for internal routing
+import Link from 'next/link'; 
 import { useAuth } from '../hooks/useAuth';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 
-// Define the required interface for form data (excluding password2 for API call if separate)
+// Updated interface: username removed, mobile added
 interface RegisterFormData {
-  username: string;
+  mobile: string;
   email: string;
   first_name: string;
   last_name: string;
@@ -18,7 +22,7 @@ interface RegisterFormData {
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState<RegisterFormData>({
-    username: '',
+    mobile: '',
     email: '',
     first_name: '',
     last_name: '',
@@ -31,7 +35,7 @@ const RegisterPage = () => {
   const { register } = useAuth();
   const router = useRouter();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => { // Explicitly typed the event
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => { 
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -47,19 +51,36 @@ const RegisterPage = () => {
     }
 
     try {
-      // FIX FOR 400 ERROR (Backend requires agency/agency_role even if null)
       const finalPayload = {
         ...formData,
-        agency: null,      // Explicitly set null for normal users
-        agency_role: null, // Explicitly set null for normal users
+        agency: null,      
+        agency_role: null, 
       };
       
-      // API expects all fields, including password2 for validation in the backend (e.g., Django)
-      await register(finalPayload); 
-      // Redirect to login page after successful registration
-      router.push('/login?registered=true');
+      // Call register API
+      const response = await register(finalPayload); 
+      
+      // --- AUTO LOGIN LOGIC ---
+      if (response && response.token) {
+          // Assuming useAuth or the app handles token storage via context if we call a login success method.
+          // Since useAuth implementation isn't fully visible here (it was imported), 
+          // we act based on standard practices: Store token manually or rely on context.
+          // If you are using Context/Cookies in useAuth, ensure it picks this up.
+          // Here, we simulate a successful login redirection.
+          
+          // If your useAuth handles storage automatically upon login but not register, 
+          // you might need to manually set it here or trigger a login action.
+          // For now, we assume the user needs to be redirected to home.
+          localStorage.setItem('token', response.token); // Fallback storage
+          window.dispatchEvent(new Event("storage")); // Notify listeners if any
+          
+          router.push('/'); 
+      } else {
+          // Fallback to login page if no token returned
+          router.push('/login?registered=true');
+      }
+
     } catch (err: unknown) { 
-      // FIX for TypeScript compiler error and 400 details
       const axiosError = err as { 
           message?: string, 
           response?: { data?: { error?: string } | { [key: string]: unknown } } 
@@ -69,24 +90,19 @@ const RegisterPage = () => {
       let errorMessage = 'خطا در ثبت نام. لطفاً اطلاعات را بررسی کنید.';
       
       if (typeof apiErrors === 'object' && apiErrors !== null && !Array.isArray(apiErrors)) {
-          // Case 1: DRF Validation error ({field: ["error"]})
-          // Check if it looks like a validation error map (e.g., has keys that aren't just 'error')
           const isValidationError = !('error' in apiErrors) && Object.keys(apiErrors).length > 0;
           
           if (isValidationError) {
-              // Extract and display detailed validation error
+              // Handle field errors (e.g., mobile already exists)
               const detail = Object.values(apiErrors).flat().join(' | ');
               if (detail) {
-                  errorMessage = 'اعتبارسنجی ناموفق: ' + detail;
+                  errorMessage = detail;
               }
           } 
-          // Case 2: Simple error object that might contain { "error": "..." } (FIXED COMPILE ERROR HERE)
           else if (typeof (apiErrors as { error?: string }).error === 'string') {
               errorMessage = (apiErrors as { error: string }).error;
           }
-          
       } else {
-          // Fallback: Axios message or generic error message
           errorMessage = axiosError.message || errorMessage;
       }
 
@@ -109,7 +125,16 @@ const RegisterPage = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="نام کاربری" name="username" type="text" required onChange={handleChange} value={formData.username} />
+            {/* Changed from Username to Mobile */}
+            <Input 
+                label="شماره موبایل" 
+                name="mobile" 
+                type="text" 
+                placeholder="09..."
+                required 
+                onChange={handleChange} 
+                value={formData.mobile} 
+            />
             <Input label="ایمیل" name="email" type="email" required onChange={handleChange} value={formData.email} />
             <Input label="نام" name="first_name" type="text" required onChange={handleChange} value={formData.first_name} />
             <Input label="نام خانوادگی" name="last_name" type="text" required onChange={handleChange} value={formData.last_name} />

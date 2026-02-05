@@ -1,10 +1,13 @@
-// src/pages/login.tsx v1.0.2
+// src/pages/login.tsx
+// version: 1.1.0
+// CHANGE: Updated label to "Mobile or Email".
+
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import Link from 'next/link'; // Import Link for internal routing
-import { useAuth } from '../hooks/useAuth'; // Assuming this hook is implemented
-import { Input } from '../components/ui/Input'; // Base Input component
-import { Button } from '../components/ui/Button'; // Base Button component
+import Link from 'next/link'; 
+import { useAuth } from '../hooks/useAuth'; 
+import { Input } from '../components/ui/Input'; 
+import { Button } from '../components/ui/Button'; 
 
 const LoginPage = () => {
   const [username, setUsername] = useState('');
@@ -21,13 +24,11 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
+      // Backend now accepts mobile or email in the 'username' field
       await login({ username, password });
-      // Redirect to the destination page if provided, otherwise to home
       router.push((router.query.next as string) || '/');
-    } catch (err: unknown) { // Fixed: Changed type to 'unknown'
-      // Use type assertion to safely access error properties
+    } catch (err: unknown) { 
       const axiosError = err as { message?: string, response?: { data?: { error?: string } } };
-      // Display error from API (e.g., 'Incorrect username or password')
       const errorMessage = axiosError.response?.data?.error || axiosError.message || 'خطا در ورود به سیستم.';
       setError(errorMessage);
     } finally {
@@ -56,22 +57,23 @@ const LoginPage = () => {
 
         <form onSubmit={handleSubmit}>
           <Input 
-            label="نام کاربری"
+            label="شماره موبایل یا ایمیل" // CHANGED LABEL
             id="username"
-            name="username" // Added name property
+            name="username" 
             type="text"
             required
             value={username}
-            onChange={handleInputChange} // Used a dedicated handler
+            onChange={handleInputChange} 
+            placeholder="مثال: 0912..."
           />
           <Input 
             label="رمز عبور"
             id="password"
-            name="password" // Added name property
+            name="password" 
             type="password"
             required
             value={password}
-            onChange={handleInputChange} // Used a dedicated handler
+            onChange={handleInputChange} 
           />
           
           <div className="mt-6">

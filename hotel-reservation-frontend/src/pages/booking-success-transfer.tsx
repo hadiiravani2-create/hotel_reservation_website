@@ -1,6 +1,6 @@
 // src/pages/booking-success-transfer.tsx
-// version: 1.5.0
-// REFACTOR: Updated import path for BankCard (moved to /components/payment/) and enhanced UI.
+// version: 2.0.0
+// FIX: Redirects guest users to /track-booking with query params for auto-lookup.
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
@@ -20,13 +20,15 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 import { DetailCard } from '@/components/ui/DetailCard'; 
-import { BankCard } from '@/components/payment/BankCard'; // <-- مسیر جدید
+import { BankCard } from '@/components/payment/BankCard';
 import { formatPrice } from '@/utils/format';
 import { CheckCircle, CreditCard, Receipt, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth'; // [NEW]
 
 const BookingSuccessTransferPage: React.FC = () => {
     const router = useRouter();
     const { booking_code } = router.query;
+    const { isAuthenticated } = useAuth(); // [NEW] Check auth status
 
     const [selectedBankId, setSelectedBankId] = useState<string>('');
     const [trackingCode, setTrackingCode] = useState('');
@@ -51,13 +53,31 @@ const BookingSuccessTransferPage: React.FC = () => {
         mutationFn: (payload: GenericPaymentConfirmationPayload) => submitPaymentConfirmation(payload),
         onSuccess: () => {
             alert('اطلاعات پرداخت شما با موفقیت ثبت شد. پس از تایید توسط تیم مالی، رزرو شما نهایی خواهد شد.');
-            router.push('/profile/bookings');
+            
+            if (isAuthenticated) {
+                // کاربر لاگین کرده -> رزروهای من
+                router.push('/profile/bookings');
+            } else {
+                // [FIX] کاربر مهمان -> پیگیری رزرو (با ارسال پارامترها)
+                // پیدا کردن کد ملی مهمان اول
+                const guestNid = booking?.guests && booking.guests.length > 0 ? booking.guests[0].national_id : '';
+                
+                if (guestNid) {
+                    router.push(`/track-booking?code=${booking?.booking_code}&nid=${guestNid}`);
+                } else {
+                    router.push('/track-booking');
+                }
+            }
         },
         onError: (error: any) => {
             alert(`خطا در ثبت اطلاعات: ${error.response?.data?.error || error.message}`);
         }
     });
 
+    // ... بقیه کدها (handleDateChange, handleSubmit, JSX) دقیقاً مثل قبل ...
+    // برای جلوگیری از طولانی شدن، بقیه کد را تکرار نمی‌کنم چون تغییری نکرده‌اند.
+    // فقط بخش onSuccess و ایمپورت‌ها تغییر کرده است.
+    
     const handleDateChange = (date: DateObject | null) => {
         setPaymentDate(date ? date.format("YYYY-MM-DD") : "");
     };
@@ -89,8 +109,7 @@ const BookingSuccessTransferPage: React.FC = () => {
         <div className="min-h-screen flex flex-col bg-gray-50" dir="rtl">
             <Header />
             <main className="flex-grow container mx-auto max-w-5xl px-4 py-8">
-                
-                {/* Success Banner */}
+                {/* ... (همان JSX قبلی) ... */}
                 {booking.status !== 'awaiting_confirmation' && (
                     <div className="bg-gradient-to-r from-green-600 to-green-500 text-white rounded-2xl p-8 text-center shadow-lg mb-8">
                         <div className="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
@@ -110,14 +129,11 @@ const BookingSuccessTransferPage: React.FC = () => {
                 )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    
-                    {/* Left Column: Main Content */}
                     <div className="lg:col-span-2 space-y-6">
                         <DetailCard title="مرحله ۱: انتخاب حساب و واریز وجه" icon={CreditCard}>
                             <p className="text-gray-500 mb-6 text-sm leading-relaxed">
                                 مبلغ رزرو را به یکی از شماره‌کارت‌های زیر (کارت به کارت، پایا یا ساتنا) واریز نمایید و سپس روی کارت حساب مورد نظر کلیک کنید.
                             </p>
-                            
                             {isLoadingBanks ? (
                                 <div className="text-center py-10 text-gray-400">در حال دریافت اطلاعات بانکی...</div>
                             ) : (
@@ -187,7 +203,6 @@ const BookingSuccessTransferPage: React.FC = () => {
                         </DetailCard>
                     </div>
 
-                    {/* Right Column: Tips (Sidebar) */}
                     <div className="lg:col-span-1">
                         <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 sticky top-24">
                             <h3 className="font-bold text-blue-800 mb-4 flex items-center text-lg">
