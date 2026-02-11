@@ -11,12 +11,14 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   // OLD: error?: string | null;
   error?: string | null | any; // Allow object to extract message safely
   icon?: React.ReactElement; // Prop to accept an icon element
+  helperText?: string;
 }
 
 export const Input: React.FC<InputProps> = ({ 
   label, 
   error,
   icon,
+  helperText,
   className = '', 
   ...props 
 }) => {

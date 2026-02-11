@@ -67,6 +67,7 @@ export interface BookingDetail {
     check_in: string;
     check_out: string;
     total_price: number;
+    paid_amount: number;
     total_room_price?: number;   
     total_service_price?: number; 
     total_vat?: number;

@@ -143,6 +143,7 @@ export interface BedType {
 export interface AvailableRoom {
   id: number;
   name: string;
+  priority: number;
   description: string | null;
   base_capacity: number;
   extra_capacity: number;

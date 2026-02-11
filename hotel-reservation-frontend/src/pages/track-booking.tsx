@@ -1,10 +1,10 @@
 // src/pages/track-booking.tsx
-// version: 2.1.0
-// FEATURE: Auto-execute search if 'code' and 'nid' params exist in URL.
+// version: 2.1.2
+// FEATURE: Added 'Pay Now' button for unpaid/partial bookings that are not cancelled.
 
 import React, { useState, useEffect } from 'react';
 import { NextPage } from 'next';
-import { useRouter } from 'next/router'; // [NEW] Import router
+import { useRouter } from 'next/router';
 import { useMutation } from '@tanstack/react-query';
 import {
     guestBookingLookup,
@@ -17,14 +17,13 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { FaFilePdf, FaHotel, FaCalendarAlt, FaUser, FaBed, FaMoneyBillWave } from 'react-icons/fa';
+// اضافه کردن آیکون کارت اعتباری
+import { FaFilePdf, FaHotel, FaCalendarAlt, FaUser, FaBed, FaMoneyBillWave, FaLock, FaCreditCard } from 'react-icons/fa';
 import { toPersianDigits, formatPrice } from '@/utils/format';
 
-// ... (توابع کمکی getStatusBadge و کامپوننت BookingDetailView بدون تغییر باقی می‌مانند) ...
-// برای کوتاه شدن پاسخ، کدهای تکراری بالای فایل را اینجا نمی‌آورم. 
-// لطفا کدهای getStatusBadge و BookingDetailView را از فایل قبلی حفظ کنید.
-
+// ... (getStatusBadge function remains the same) ...
 const getStatusBadge = (status: BookingStatus) => {
+    // ... (بدون تغییر) ...
     const styles: Record<string, string> = {
         pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
         confirmed: 'bg-green-100 text-green-800 border-green-200',
@@ -33,6 +32,7 @@ const getStatusBadge = (status: BookingStatus) => {
         checked_out: 'bg-gray-100 text-gray-800 border-gray-200',
         awaiting_confirmation: 'bg-orange-100 text-orange-800 border-orange-200',
         cancellation_requested: 'bg-rose-100 text-rose-800 border-rose-200',
+        no_capacity: 'bg-red-100 text-red-800 border-red-200',
     };
     
     const labels: Record<string, string> = {
@@ -43,6 +43,7 @@ const getStatusBadge = (status: BookingStatus) => {
         checked_out: 'تخلیه شده',
         awaiting_confirmation: 'در انتظار تایید',
         cancellation_requested: 'درخواست لغو',
+        no_capacity: 'عدم ظرفیت',
     };
 
     return (
@@ -58,7 +59,27 @@ interface BookingDetailViewProps {
 }
 
 const BookingDetailView: React.FC<BookingDetailViewProps> = ({ detail, guestIdCode }) => {
+    const router = useRouter(); // برای هدایت به صفحه پرداخت
+
+    // --- Logic Calculations ---
+    const isConfirmed = detail.status === 'confirmed';
+    const paidAmount = detail.paid_amount || 0;
+    const isFullyPaid = paidAmount >= detail.total_price;
+    
+    // وضعیت‌هایی که رزرو در آن‌ها عملاً از دست رفته یا کنسل شده است
+    const isCancelledOrInvalid = ['cancelled', 'no_capacity'].includes(detail.status);
+
+    // شرط نمایش دکمه پرداخت:
+    // 1. مبلغ کامل پرداخت نشده باشد.
+    // 2. رزرو کنسل یا رد نشده باشد.
+    const showPaymentButton = !isFullyPaid && !isCancelledOrInvalid;
+
+    // شرط دانلود واچر: تایید شده + پرداخت کامل
+    const canDownloadVoucher = isConfirmed && isFullyPaid;
+
     const handleDownloadPdf = async () => {
+        if (!canDownloadVoucher) return; 
+
         try {
             await downloadGuestBookingPDF(detail.booking_code, guestIdCode);
         } catch (error) {
@@ -73,6 +94,7 @@ const BookingDetailView: React.FC<BookingDetailViewProps> = ({ detail, guestIdCo
 
     return (
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden mt-8 animate-fade-in-up">
+            {/* ... (Header and Details Grid remain exactly the same) ... */}
             <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -114,20 +136,55 @@ const BookingDetailView: React.FC<BookingDetailViewProps> = ({ detail, guestIdCo
                         </ul>
                     </div>
                 </div>
+
                 <div className="flex items-start gap-3">
                     <div className="mt-1 bg-blue-50 p-2 rounded-lg text-blue-600"><FaMoneyBillWave /></div>
-                    <div>
-                        <p className="text-sm text-gray-500 mb-1">مبلغ کل</p>
-                        <p className="font-bold text-gray-800 text-lg">
-                            {formatPrice(detail.total_price)} <span className="text-xs font-normal text-gray-500">تومان</span>
-                        </p>
+                    <div className="w-full">
+                        <p className="text-sm text-gray-500 mb-1">وضعیت مالی</p>
+                        <div className="flex justify-between items-center w-full">
+                            <span className="text-sm text-gray-600">مبلغ کل:</span>
+                            <span className="font-bold text-gray-800">{formatPrice(detail.total_price)} تومان</span>
+                        </div>
+                        <div className="flex justify-between items-center w-full mt-1">
+                            <span className="text-sm text-gray-600">پرداخت شده:</span>
+                            <span className={`font-bold ${isFullyPaid ? 'text-green-600' : 'text-orange-500'}`}>
+                                {formatPrice(paidAmount)} تومان
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-                <Button onClick={handleDownloadPdf} variant="outline" className="flex items-center gap-2 text-sm hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                    <FaFilePdf className="text-red-500" />
+            {/* Actions Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row justify-end items-center gap-3">
+                
+                {/* دکمه جدید پرداخت: اگر پرداخت کامل نیست و کنسل نشده */}
+                {showPaymentButton && (
+                    <Button 
+                        onClick={() => router.push(`/payment/${detail.booking_code}`)}
+                        className="flex items-center gap-2 text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors"
+                    >
+                        <FaCreditCard />
+                        پرداخت / تکمیل وجه
+                    </Button>
+                )}
+
+                {/* پیام راهنما برای دانلود واچر */}
+                {!canDownloadVoucher && (
+                    <span className="text-xs text-orange-600 bg-orange-50 px-3 py-1 rounded-md border border-orange-100">
+                        <FaLock className="inline ml-1 mb-0.5"/>
+                        جهت دریافت واچر، رزرو باید تایید شده و تسویه کامل گردد.
+                    </span>
+                )}
+                
+                {/* دکمه دانلود واچر */}
+                <Button 
+                    onClick={handleDownloadPdf} 
+                    variant="outline" 
+                    disabled={!canDownloadVoucher} 
+                    className={`flex items-center gap-2 text-sm transition-colors ${!canDownloadVoucher ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-50 hover:text-blue-600'}`}
+                >
+                    <FaFilePdf className={canDownloadVoucher ? "text-red-500" : "text-gray-400"} />
                     دانلود واچر (PDF)
                 </Button>
             </div>
@@ -135,49 +192,39 @@ const BookingDetailView: React.FC<BookingDetailViewProps> = ({ detail, guestIdCo
     );
 };
 
-// --- Main Page Component (UPDATED) ---
+// ... (Rest of the TrackBooking component remains exactly the same) ...
+// (TrackBooking function and export default)
 
 const TrackBooking: NextPage = () => {
-    const router = useRouter(); // [NEW] استفاده از روتر
+    // ... کد قبلی TrackBooking بدون هیچ تغییری ...
+    // برای جلوگیری از شلوغی، کدهای این بخش تکرار نمی‌شود زیرا تغییری نکرده‌اند.
     
-    // State
+    const router = useRouter(); 
+    
     const [bookingCode, setBookingCode] = useState('');
     const [idNumber, setIdNumber] = useState('');
-    
-    // فلگ برای جلوگیری از درخواست تکراری در React Strict Mode
     const [hasAutoSearched, setHasAutoSearched] = useState(false);
 
     const { mutate, isPending, data: bookingDetail, isSuccess, error } = useMutation({
         mutationFn: (payload: GuestLookupPayload) => guestBookingLookup(payload),
     });
 
-    // [NEW LOGIC]: Auto-Fill and Auto-Submit based on URL Query
     useEffect(() => {
-        // صبر می‌کنیم تا روتر آماده شود
         if (!router.isReady) return;
-        
-        // اگر قبلاً جستجو کرده‌ایم، دوباره انجام نده
         if (hasAutoSearched) return;
 
         const { code, nid } = router.query;
 
-        // اگر هر دو پارامتر وجود داشتند
         if (code && nid) {
             const codeStr = code as string;
             const nidStr = nid as string;
-
-            // 1. پر کردن استیت‌ها (برای نمایش در اینپوت‌ها)
             setBookingCode(codeStr);
             setIdNumber(nidStr);
-            
-            // 2. اجرای خودکار جستجو
             mutate({ 
                 booking_code: codeStr, 
                 national_id: nidStr, 
                 passport_number: null 
             });
-            
-            // 3. تنظیم فلگ برای جلوگیری از تکرار
             setHasAutoSearched(true);
         }
     }, [router.isReady, router.query, mutate, hasAutoSearched]);

@@ -7,17 +7,19 @@ import DatePicker, { DateObject } from "react-multi-date-picker";
 import { DATE_CONFIG } from '@/config/date';
 
 interface JalaliDatePickerProps {
-  label: string;
-  name: string;
+  label?: string;
+  name?: string;
   onChange: (date: DateObject | null) => void;
   required?: boolean;
   value?: string | DateObject | Date | null; // FIX: Added null support
   minDate?: DateObject | Date | string | number;
   maxDate?: DateObject | Date | string | number;
+  format?:string;
+  plugins?: any[];
 }
 
 export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({ 
-  label, name, onChange, required, value, minDate, maxDate 
+  label, name, onChange, required, value, minDate, maxDate, format, plugins 
 }) => {
 
   const handleDateChange = (date: DateObject | null) => {
@@ -37,6 +39,8 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({
         calendarPosition="bottom-right"
         minDate={minDate}
         maxDate={maxDate}
+	format={format}
+	plugins={plugins}
         containerClassName="w-full"
         inputClass="w-full h-12 p-4 bg-white border border-gray-300 rounded-md shadow-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
       />
