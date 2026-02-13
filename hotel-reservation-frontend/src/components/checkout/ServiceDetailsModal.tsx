@@ -1,56 +1,58 @@
-// src/components/checkout/ServiceDetailsModal.tsx
-// version: 1.0.0
-// Initial creation of the modal for capturing extra service details.
-
+// FILE: src/components/checkout/ServiceDetailsModal.tsx
 import React, { useState } from 'react';
 import { HotelService } from '@/types/hotel';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Button } from '../ui/Button';
 
-interface Props {
+interface ServiceDetailsModalProps {
   service: HotelService;
   isOpen: boolean;
   onClose: () => void;
   onSave: (details: Record<string, any>) => void;
 }
 
-const ServiceDetailsModal: React.FC<Props> = ({ service, isOpen, onClose, onSave }) => {
-  const [flightNumber, setFlightNumber] = useState('');
-  const [arrivalTime, setArrivalTime] = useState('');
+const ServiceDetailsModal: React.FC<ServiceDetailsModalProps> = ({
+  service,
+  isOpen,
+  onClose,
+  onSave
+}) => {
+  const [note, setNote] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    // In a real scenario, you'd generate the form fields dynamically based on service_type
-    const details = {
-      flight_number: flightNumber,
-      arrival_time: arrivalTime,
-    };
-    onSave(details);
-  };
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50" dir="rtl">
-      <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-4">جزئیات سرویس: {service.name}</h2>
-        <div className="space-y-4">
-          {/* This form should be generated dynamically in a real application */}
-          <Input
-            label="شماره پرواز"
-            value={flightNumber}
-            onChange={(e) => setFlightNumber(e.target.value)}
-            placeholder="مثال: IR245"
-          />
-          <Input
-            label="ساعت تخمینی ورود به فرودگاه"
-            value={arrivalTime}
-            onChange={(e) => setArrivalTime(e.target.value)}
-            placeholder="مثال: 14:30"
-          />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+            <h3 className="font-bold text-gray-800">جزئیات {service.name}</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">&times;</button>
         </div>
-        <div className="flex justify-end space-x-4 space-x-reverse mt-6">
-          <Button onClick={onClose} variant="secondary">انصراف</Button>
-          <Button onClick={handleSave} variant="primary">ذخیره</Button>
+        
+        <div className="p-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">توضیحات تکمیلی (اختیاری)</label>
+            <textarea
+                rows={4}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                placeholder="مثلا: ساعت ورود برای ترانسفر، یا رژیم غذایی خاص..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+            />
+        </div>
+
+        <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
+            <button 
+                onClick={onClose}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+                انصراف
+            </button>
+            <Button 
+                onClick={() => onSave({ note })} 
+                variant="primary"
+                className="px-6"
+            >
+                ثبت جزئیات
+            </Button>
         </div>
       </div>
     </div>

@@ -1,31 +1,40 @@
-// src/components/payment/BookingSummary.tsx
-// version: 2.0.0
-// FEATURE: Enhanced booking summary with price breakdown, duration calculation, and guest details.
+// FILE: src/components/payment/BookingSummary.tsx
+// version: 2.1.0
+// REFACTOR: Added safer date handling and duration calculation.
 
 import React, { useState } from 'react';
 import { BookingDetail } from '@/api/reservationService';
-import { formatPrice } from '@/utils/format';
+import { formatPrice, toPersianDigits } from '@/utils/format';
 import { DetailCard } from '@/components/ui/DetailCard';
 import { 
     Hotel, Calendar, Clock, Users, ChevronDown, ChevronUp, 
-    FileText, Calculator, BedDouble 
+    Calculator, BedDouble, CheckCircle 
 } from 'lucide-react';
 import { DateObject } from 'react-multi-date-picker';
 import { DATE_CONFIG } from '@/config/date';
 
-// تابع کمکی برای تبدیل تاریخ
+// Helper: Format Date safely
 const formatJalaliDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    return new DateObject({ date: dateStr, calendar: DATE_CONFIG.calendar, locale: DATE_CONFIG.locale }).format('dddd D MMMM YYYY');
+    if (!dateStr) return '---';
+    try {
+        return new DateObject({ date: dateStr, ...DATE_CONFIG }).format('dddd D MMMM YYYY');
+    } catch (e) {
+        return dateStr;
+    }
 };
 
-// تابع کمکی برای محاسبه مدت اقامت
+// Helper: Calculate Duration
 const calculateDuration = (start: string, end: string) => {
     if (!start || !end) return 0;
-    const startDate = new DateObject({ date: start, calendar: DATE_CONFIG.calendar, locale: DATE_CONFIG.locale });
-    const endDate = new DateObject({ date: end, calendar: DATE_CONFIG.calendar, locale: DATE_CONFIG.locale });
-    // تفاضل به روز (تقریبی برای دمو، بهتر است دقیق‌تر محاسبه شود)
-    return Math.max(1, (endDate.toUnix() - startDate.toUnix()) / (24 * 3600));
+    try {
+        const startDate = new DateObject({ date: start, ...DATE_CONFIG });
+        const endDate = new DateObject({ date: end, ...DATE_CONFIG });
+        // Calculate difference in days
+        const diff = (endDate.toUnix() - startDate.toUnix()) / (24 * 3600);
+        return Math.max(1, Math.round(diff));
+    } catch (e) {
+        return 1;
+    }
 };
 
 interface Props {
@@ -43,64 +52,62 @@ export const BookingSummary: React.FC<Props> = ({ booking }) => {
             <div className="flex justify-between items-start border-b border-gray-100 pb-4 mb-4">
                 <div>
                     <h3 className="text-xl font-bold text-gray-800">{booking.hotel_name}</h3>
-                    <div className="text-sm text-gray-500 mt-1 flex items-center">
-                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs ml-2">کد: {booking.booking_code}</span>
-                        {/* اگر ستاره هتل موجود است اینجا نمایش دهید */}
+                    <div className="flex items-center gap-2 mt-2">
+                         <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs border border-blue-100 font-mono">
+                            کد پیگیری: {booking.booking_code}
+                         </span>
                     </div>
                 </div>
-                <div className="text-center bg-gray-50 p-2 rounded-lg border border-gray-200">
-                    <span className="block text-xs text-gray-500">مدت اقامت</span>
-                    <span className="font-bold text-indigo-600">{duration} شب</span>
+                <div className="text-center bg-indigo-50 p-2 rounded-lg border border-indigo-100 min-w-[80px]">
+                    <span className="block text-xs text-indigo-500 mb-1">مدت اقامت</span>
+                    <span className="font-bold text-indigo-700 text-lg">{toPersianDigits(duration)} شب</span>
                 </div>
             </div>
 
             {/* 2. Dates & Times */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 relative overflow-hidden">
-                    <div className="absolute left-0 top-0 h-full w-1 bg-indigo-500"></div>
-                    <div className="flex items-center text-indigo-900 mb-1">
-                        <Calendar className="w-4 h-4 ml-1 opacity-70"/>
-                        <span className="text-xs font-bold">تاریخ ورود</span>
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 relative">
+                    <div className="flex items-center text-gray-700 mb-1 gap-2">
+                        <Calendar className="w-4 h-4 text-green-600"/>
+                        <span className="text-xs font-bold">زمان ورود</span>
                     </div>
-                    <div className="text-sm font-semibold">{formatJalaliDate(booking.check_in)}</div>
-                    <div className="text-xs text-gray-500 mt-1 flex items-center">
-                        <Clock className="w-3 h-3 ml-1"/> از ساعت ۱۴:۰۰
+                    <div className="text-sm font-semibold mr-6">{formatJalaliDate(booking.check_in)}</div>
+                    <div className="text-xs text-gray-500 mt-1 flex items-center mr-6">
+                        <Clock className="w-3 h-3 ml-1"/> ساعت ۱۴:۰۰
                     </div>
                 </div>
-                <div className="bg-pink-50 p-3 rounded-lg border border-pink-100 relative overflow-hidden">
-                    <div className="absolute left-0 top-0 h-full w-1 bg-pink-500"></div>
-                    <div className="flex items-center text-pink-900 mb-1">
-                        <Calendar className="w-4 h-4 ml-1 opacity-70"/>
-                        <span className="text-xs font-bold">تاریخ خروج</span>
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 relative">
+                    <div className="flex items-center text-gray-700 mb-1 gap-2">
+                        <Calendar className="w-4 h-4 text-red-500"/>
+                        <span className="text-xs font-bold">زمان خروج</span>
                     </div>
-                    <div className="text-sm font-semibold">{formatJalaliDate(booking.check_out)}</div>
-                    <div className="text-xs text-gray-500 mt-1 flex items-center">
-                        <Clock className="w-3 h-3 ml-1"/> تا ساعت ۱۲:۰۰
+                    <div className="text-sm font-semibold mr-6">{formatJalaliDate(booking.check_out)}</div>
+                    <div className="text-xs text-gray-500 mt-1 flex items-center mr-6">
+                        <Clock className="w-3 h-3 ml-1"/> ساعت ۱۲:۰۰
                     </div>
                 </div>
             </div>
 
             {/* 3. Room Details */}
             <div className="mb-6">
-                <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center">
-                    <BedDouble className="w-4 h-4 ml-1 text-gray-400"/>
-                    اتاق‌های انتخاب شده
+                <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                    <BedDouble className="w-4 h-4 text-gray-400"/>
+                    لیست اتاق‌ها
                 </h4>
                 <div className="space-y-2">
                     {booking.booking_rooms.map((room, index) => (
-                        <div key={index} className="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-indigo-300 transition-colors">
+                        <div key={index} className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-lg shadow-sm">
                             <div>
                                 <p className="font-bold text-gray-800 text-sm">{room.room_type_name}</p>
                                 <p className="text-xs text-gray-500 mt-1">سرویس: {room.board_type}</p>
                             </div>
-                            <div className="text-left">
-                                <span className="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded ml-2">
-                                    {room.quantity} باب
+                            <div className="text-left flex flex-col items-end">
+                                <span className="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded">
+                                    {toPersianDigits(room.quantity)} باب
                                 </span>
-                                <span className="text-xs text-gray-500 flex items-center mt-1 justify-end">
+                                <span className="text-xs text-gray-400 flex items-center mt-1">
                                     <Users className="w-3 h-3 ml-1"/>
-                                    {room.adults > 0 && `${room.adults} بزرگسال`}
-                                    {room.children > 0 && `، ${room.children} کودک`}
+                                    {toPersianDigits(room.adults)} + {toPersianDigits(room.children)}
                                 </span>
                             </div>
                         </div>
@@ -114,44 +121,47 @@ export const BookingSummary: React.FC<Props> = ({ booking }) => {
                     onClick={() => setShowPriceDetails(!showPriceDetails)}
                     className="w-full flex justify-between items-center p-4 bg-gray-100 hover:bg-gray-200 transition-colors text-sm font-medium text-gray-700"
                 >
-                    <span className="flex items-center">
-                        <Calculator className="w-4 h-4 ml-2 text-gray-500"/>
-                        جزئیات صورتحساب
+                    <span className="flex items-center gap-2">
+                        <Calculator className="w-4 h-4 text-gray-500"/>
+                        مشاهده جزئیات صورتحساب
                     </span>
                     {showPriceDetails ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
                 </button>
                 
                 {showPriceDetails && (
-                    <div className="p-4 border-t border-gray-200 space-y-2 text-sm">
+                    <div className="p-4 border-t border-gray-200 space-y-2 text-sm bg-white">
                         <div className="flex justify-between text-gray-600">
-                            <span>هزینه پایه اتاق‌ها ({duration} شب):</span>
-                            <span>{formatPrice(booking.total_room_price || 0)} تومان</span>
+                            <span>هزینه پایه اقامت:</span>
+                            <span>{formatPrice(booking.total_room_price || 0)} ریال</span>
                         </div>
                         
-                        {/* نمایش خدمات اگر وجود دارد */}
+                        {/* Services */}
                         {booking.booked_services && booking.booked_services.length > 0 && (
                              <div className="border-t border-gray-100 pt-2 mt-2">
-                                <span className="text-gray-500 text-xs block mb-1">خدمات اضافی:</span>
+                                <span className="text-gray-500 text-xs block mb-1 font-bold">خدمات اضافه:</span>
                                 {booking.booked_services.map(s => (
-                                    <div key={s.id} className="flex justify-between text-gray-600 pl-2 text-xs">
-                                        <span>+ {s.hotel_service.name}</span>
+                                    <div key={s.id} className="flex justify-between text-gray-600 pl-2 text-xs mb-1">
+                                        <span>+ {s.hotel_service.name} ({toPersianDigits(s.quantity)} عدد)</span>
                                         <span>{formatPrice(s.total_price)}</span>
                                     </div>
                                 ))}
                             </div>
                         )}
 
-                        <div className="flex justify-between text-gray-600 border-t border-gray-100 pt-2 mt-2">
-                            <span>مالیات بر ارزش افزوده (VAT):</span>
-                            <span>{formatPrice(booking.total_vat || 0)} تومان</span>
-                        </div>
+                        {/* VAT */}
+                        {(booking.total_vat || 0) > 0 && (
+                            <div className="flex justify-between text-gray-600 border-t border-gray-100 pt-2 mt-2">
+                                <span>مالیات بر ارزش افزوده:</span>
+                                <span>{formatPrice(booking.total_vat || 0)} ریال</span>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                <div className="p-4 bg-indigo-50 border-t border-indigo-100 flex justify-between items-center">
+                <div className="p-4 bg-primary-brand/5 border-t border-primary-brand/10 flex justify-between items-center">
                     <span className="font-bold text-gray-700">مبلغ قابل پرداخت:</span>
-                    <span className="font-extrabold text-2xl text-indigo-600">
-                        {formatPrice(booking.total_price)} <span className="text-sm font-normal text-gray-500">تومان</span>
+                    <span className="font-black text-xl text-primary-brand">
+                        {formatPrice(booking.total_price)} <span className="text-xs font-normal text-gray-500">ریال</span>
                     </span>
                 </div>
             </div>

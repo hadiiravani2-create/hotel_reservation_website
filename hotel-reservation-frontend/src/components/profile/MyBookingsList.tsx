@@ -1,6 +1,7 @@
-// src/components/profile/MyBookingsList.tsx
-// version: 2.1.0
-// FIX: Corrected date parsing logic and added guest/capacity details to the UI.
+// FILE: src/components/profile/MyBookingsList.tsx
+// version: 2.1.1
+// FIX: Added 'awaiting_completion' to statusMap to resolve TypeScript error.
+// UI: Added correct label and styling for the new status.
 
 import React, { useCallback, useState } from 'react';
 import { useRouter } from 'next/router';
@@ -11,33 +12,31 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { 
     Hotel, Calendar, Clock, CreditCard, ChevronDown, ChevronUp, 
     FileText, XCircle, Edit, Info, CheckCircle, AlertTriangle, 
-    User, Users 
+    User, Users, Wallet 
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { fetchMyBookings, BookingListItem, BookingStatus, submitBookingRequest, downloadMyBookingPDF } from '@/api/reservationService';
 import { formatPrice } from '@/utils/format';
 
-// تابع اصلاح شده برای نمایش تاریخ
-// نکته: فرض بر این است که تاریخ ورودی (dateStr) فرمت استاندارد تاریخ (مثل YYYY-MM-DD) است.
+// تابع نمایش تاریخ شمسی
 const formatDate = (dateStr: string): string => {
   if (!dateStr) return '-';
-  // استفاده صریح از تقویم و لوکیل فارسی برای اطمینان از تبدیل صحیح
   return new DateObject({ date: dateStr, calendar: persian, locale: persian_fa })
     .format("dddd D MMMM YYYY");
 };
 
-// ... (calculateDuration and statusMap remain unchanged)
 const calculateDuration = (start: string, end: string) => {
     if (!start || !end) return 0;
-    // تبدیل هر دو تاریخ به آبجکت یکسان برای مقایسه دقیق
     const startDate = new DateObject({ date: start, calendar: persian, locale: persian_fa });
     const endDate = new DateObject({ date: end, calendar: persian, locale: persian_fa });
     return Math.max(1, Math.round((endDate.toUnix() - startDate.toUnix()) / (24 * 3600)));
 };
 
+// 1. MAP UPDATE: Added 'awaiting_completion'
 const statusMap: Record<BookingStatus, { label: string; color: string; icon: React.ElementType }> = {
   pending: { label: 'در انتظار پرداخت', color: 'text-yellow-700 bg-yellow-50 border-yellow-200', icon: Clock },
   awaiting_confirmation: { label: 'منتظر تایید', color: 'text-cyan-700 bg-cyan-50 border-cyan-200', icon: Clock },
+  awaiting_completion: { label: 'در انتظار تکمیل وجه', color: 'text-purple-700 bg-purple-50 border-purple-200', icon: Wallet }, // <--- ADDED
   confirmed: { label: 'تایید شده', color: 'text-green-700 bg-green-50 border-green-200', icon: CheckCircle },
   cancelled: { label: 'لغو شده', color: 'text-red-700 bg-red-50 border-red-200', icon: XCircle },
   cancellation_requested: { label: 'درخواست لغو', color: 'text-orange-700 bg-orange-50 border-orange-200', icon: AlertTriangle },
@@ -88,7 +87,7 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-indigo-100 mb-6">
       
-      {/* 1. Header Section */}
+      {/* Header Section */}
       <div className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white">
         <div className="flex items-center gap-3">
             <div className="p-3 bg-indigo-50 rounded-full text-indigo-600">
@@ -115,25 +114,25 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
                 <StatusIcon className="w-3 h-3 ml-1" /> {label}
             </span>
             <div className="text-lg font-bold text-indigo-700">
-                {formatPrice(booking.total_price)} <span className="text-xs font-normal text-gray-500">تومان</span>
+                {formatPrice(booking.total_price)} <span className="text-xs font-normal text-gray-500">ریال</span>
             </div>
         </div>
       </div>
 
-      {/* 2. Toggle Button */}
-      <button 
+      {/* Toggle Button */}
+      <div 
         onClick={() => setShowDetails(!showDetails)}
-        className="w-full flex justify-between items-center px-5 py-3 bg-gray-50 hover:bg-gray-100 border-t border-gray-100 transition-colors text-sm font-medium text-gray-600"
+        className="w-full flex justify-between items-center px-5 py-3 bg-gray-50 hover:bg-gray-100 border-t border-gray-100 transition-colors text-sm font-medium text-gray-600 cursor-pointer select-none"
       >
         <span className="flex items-center">
             {showDetails ? 'بستن جزئیات' : 'مشاهده جزئیات کامل'}
         </span>
         {showDetails ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
-      </button>
+      </div>
 
-      {/* 3. Expanded Details */}
+      {/* Expanded Details */}
       {showDetails && (
-        <div className="px-5 py-6 bg-gray-50 border-t border-gray-200">
+        <div className="px-5 py-6 bg-gray-50 border-t border-gray-200 animate-fadeIn">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                 
                 {/* Dates */}
@@ -167,7 +166,7 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
                     <div className="p-3 bg-white rounded-lg border border-gray-200 flex justify-between items-center">
                         <div className="flex items-center text-gray-500">
                             <Users className="w-4 h-4 ml-2 text-gray-400"/>
-                            <span>نفرات اضافه:</span>
+                            <span>ظرفیت و نفرات:</span>
                         </div>
                         <span className="font-medium text-gray-800">{booking.capacity_details}</span>
                     </div>
@@ -177,17 +176,19 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
             {/* Action Buttons */}
             <div className="mt-6 pt-6 border-t border-gray-200 flex flex-wrap gap-3 justify-end">
                 
-                {booking.status === 'pending' && (
+                {/* دکمه پرداخت برای حالت‌های pending و awaiting_completion فعال است */}
+                {(booking.status === 'pending' || booking.status === 'awaiting_completion') && (
                     <Button onClick={() => router.push(`/payment/${booking.booking_code}`)} variant="primary" size="sm" className="flex items-center">
                         <CreditCard className="w-4 h-4 ml-1" />
-                        تکمیل پرداخت
+                        تکمیل/پرداخت وجه
                     </Button>
                 )}
 
-                {booking.status !== 'pending' && (
+                {/* دکمه فاکتور برای سایر حالت‌ها */}
+                {booking.status !== 'pending' && booking.status !== 'awaiting_completion' && (
                     <Button onClick={() => router.push(`/payment/${booking.booking_code}`)} variant="outline" size="sm" className="flex items-center">
                         <FileText className="w-4 h-4 ml-1" />
-                        فاکتور کامل
+                        مشاهده فاکتور
                     </Button>
                 )}
 
@@ -204,7 +205,7 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
                     </Button>
                 )}
 
-                {(booking.status === 'confirmed' || booking.status === 'pending') && (
+                {['confirmed', 'pending', 'awaiting_completion', 'awaiting_confirmation'].includes(booking.status) && (
                     <Button onClick={() => handleAction('cancellation')} variant="danger" size="sm" className="flex items-center bg-red-50 text-red-600 hover:bg-red-100 border border-red-200">
                         <XCircle className="w-4 h-4 ml-1" />
                         لغو رزرو
@@ -224,24 +225,37 @@ const BookingCard: React.FC<{ booking: BookingListItem; onAction: () => void }> 
   );
 };
 
-// ... (MyBookingsList component remains roughly the same)
 const MyBookingsList: React.FC = () => {
-    // ... existing code
     const router = useRouter();
     const { data: bookings, isLoading, isError, error, refetch } = useQuery<BookingListItem[], Error>({
       queryKey: ['myBookings'],
       queryFn: fetchMyBookings,
     });
   
-    if (isLoading) return <div className="text-center p-10 text-gray-500">در حال بارگذاری رزروها...</div>;
-    if (isError) return <div className="text-center p-10 text-red-600">خطا در دریافت اطلاعات: {error.message}</div>;
+    if (isLoading) return (
+        <div className="flex justify-center items-center p-16">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-brand"></div>
+            <span className="mr-3 text-gray-500">در حال دریافت لیست رزروها...</span>
+        </div>
+    );
+    
+    if (isError) return (
+        <div className="text-center p-10 bg-red-50 rounded-xl border border-red-100 text-red-600">
+            <AlertTriangle className="w-8 h-8 mx-auto mb-2" />
+            <p>خطا در دریافت اطلاعات: {error.message}</p>
+            <Button onClick={() => refetch()} variant="outline" className="mt-4" size="sm">تلاش مجدد</Button>
+        </div>
+    );
   
     return (
       <div>
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-800">تاریخچه رزروهای من</h2>
-          <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-mono">
-              {bookings?.length || 0} مورد
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <FileText className="w-6 h-6 text-indigo-600" />
+            تاریخچه رزروهای من
+          </h2>
+          <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-mono border border-indigo-100">
+              {bookings?.length || 0} رزرو
           </span>
         </div>
   
@@ -252,12 +266,14 @@ const MyBookingsList: React.FC = () => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
-            <Hotel className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-xl font-bold text-gray-600">هیچ رزروی یافت نشد</h3>
-            <p className="text-gray-500 mt-2 mb-6">شما تاکنون هیچ رزروی در سیستم ثبت نکرده‌اید.</p>
-            <Button onClick={() => router.push('/')} variant="primary">
-              شروع رزرو هتل
+          <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center">
+            <div className="bg-gray-50 p-4 rounded-full mb-4">
+                <Hotel className="w-10 h-10 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-700">هنوز رزروی انجام نداده‌اید</h3>
+            <p className="text-gray-500 mt-2 mb-6 max-w-md mx-auto">شما تاکنون هیچ رزروی در سیستم ثبت نکرده‌اید. همین حالا هتل مورد نظر خود را پیدا کنید.</p>
+            <Button onClick={() => router.push('/')} variant="primary" className="shadow-lg shadow-blue-500/20">
+              جستجو و رزرو هتل
             </Button>
           </div>
         )}

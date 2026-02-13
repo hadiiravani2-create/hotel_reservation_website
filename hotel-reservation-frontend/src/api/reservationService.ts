@@ -11,6 +11,7 @@ export interface GuestPayload {
   first_name: string;
   last_name: string;
   is_foreign: boolean;
+  gender: string | null;
   national_id: string | null;
   passport_number: string | null;
   phone_number: string | null;
@@ -59,7 +60,7 @@ export interface BookingRoomDetail {
     children: number;
     extra_requests: string | null;
 }
-export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'cancellation_requested' | 'modification_requested' | 'awaiting_confirmation'| 'no_capacity';
+export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'cancellation_requested' | 'modification_requested' | 'awaiting_confirmation'| 'awaiting_completion'| 'no_capacity';
 export interface BookingDetail {
     booking_code: string;
     hotel_name: string;

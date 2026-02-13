@@ -1,72 +1,84 @@
-import React, { useState } from 'react';
+// FILE: src/components/checkout/CheckoutServices.tsx
+import React from 'react';
 import { HotelService, SelectedServicePayload } from '@/types/hotel';
-import { Button } from '../ui/Button';
-import { ChevronDown } from 'lucide-react';
 import { formatPrice, toPersianDigits } from '@/utils/format';
+import { Coffee, Plus, Check, Info } from 'lucide-react';
 
 interface CheckoutServicesProps {
   services: HotelService[];
   selectedServices: SelectedServicePayload[];
-  onSelectService: (servicePayload: SelectedServicePayload) => void;
+  onSelectService: (service: SelectedServicePayload) => void;
   onRemoveService: (serviceId: number) => void;
   totalGuests: number;
 }
 
-const CheckoutServices: React.FC<CheckoutServicesProps> = ({ 
-  services, 
-  selectedServices, 
-  onSelectService, 
-  onRemoveService, 
-  totalGuests 
+const CheckoutServices: React.FC<CheckoutServicesProps> = ({
+  services,
+  selectedServices,
+  onSelectService,
+  onRemoveService,
+  totalGuests
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
 
-  const isSelected = (serviceId: number) => {
-    return selectedServices.some(s => s.id === serviceId);
+  const isSelected = (id: number) => selectedServices.some(s => s.id === id);
+
+  const handleToggle = (service: HotelService) => {
+    if (isSelected(service.id)) {
+      onRemoveService(service.id);
+    } else {
+      // منطق پیش‌فرض: اگر سرویس "نفری" است، تعداد مسافران را ست کن
+      const quantity = service.pricing_model === 'PERSON' ? totalGuests : 1;
+      onSelectService({
+        id: service.id,
+        quantity: quantity,
+        details: {} // جزئیات خالی که بعدا با مودال پر می‌شود
+      });
+    }
   };
-
-  const handleSelect = (service: HotelService) => {
-    const quantity = service.pricing_model === 'PERSON' ? totalGuests : 1;
-    onSelectService({ id: service.id, quantity, details: {} });
-  };
-  
-  const servicesToShow = isExpanded ? services : services.slice(0, 2);
-
-  if (!services || services.length === 0) return null;
 
   return (
-    <div className="p-5 bg-white rounded-xl shadow-lg border border-gray-100 mb-6">
-      <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-          <span className="w-1 h-6 bg-primary-brand rounded-full"></span>
-          خدمات اضافی (اختیاری)
-      </h3>
-      <div className="space-y-3">
-        {servicesToShow.map(service => (
-          <div key={service.id} className="flex justify-between items-center text-sm p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
-            <div className="flex flex-col">
-                <span className="font-semibold text-gray-800">{service.name}</span>
-                <span className="text-gray-500 text-xs mt-0.5">
-                    {service.price > 0 ? `${formatPrice(service.price)} ریال` : 'رایگان'}
-                    {service.pricing_model === 'PERSON' && ' (هر نفر)'}
-                </span>
+    <div className="bg-white rounded-xl shadow-lg border border-gray-100 mt-6">
+       <div className="bg-gray-50 p-4 border-b border-gray-100">
+        <h2 className="font-bold text-gray-800 flex items-center gap-2">
+          <Coffee className="w-5 h-5 text-orange-500" />
+          خدمات قابل افزودن
+        </h2>
+      </div>
+
+      <div className="p-2">
+        {services.map(service => {
+            const active = isSelected(service.id);
+            return (
+                <div 
+                    key={service.id} 
+                    className={`
+                        flex items-center justify-between p-3 m-2 rounded-lg border transition-all cursor-pointer
+                        ${active ? 'bg-orange-50 border-orange-200 ring-1 ring-orange-200' : 'bg-white border-gray-200 hover:border-gray-300'}
+                    `}
+                    onClick={() => handleToggle(service)}
+                >
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-full ${active ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
+                            {active ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-800 text-sm">{service.name}</h4>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                {formatPrice(service.price)} ریال / {service.pricing_model === 'PERSON' ? 'هر نفر' : 'هر سرویس'}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    {/* بجای دکمه تکی، کل کارت قابل کلیک است */}
+                </div>
+            );
+        })}
+        
+        {services.length === 0 && (
+            <div className="p-4 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
+                <Info className="w-6 h-6 text-gray-300" />
+                سرویس اضافه‌ای برای این هتل تعریف نشده است.
             </div>
-            
-            {isSelected(service.id) ? (
-              <Button onClick={() => onRemoveService(service.id)} variant="danger" size="sm" className="h-8 text-xs px-3">
-                حذف
-              </Button>
-            ) : (
-              <Button onClick={() => handleSelect(service)} variant="outline" size="sm" className="h-8 text-xs px-3 border-blue-200 text-blue-600 hover:bg-blue-50">
-                افزودن
-              </Button>
-            )}
-          </div>
-        ))}
-        {services.length > 2 && (
-            <button onClick={() => setIsExpanded(!isExpanded)} className="text-primary-brand text-sm font-medium w-full flex items-center justify-center pt-3 mt-2 border-t border-dashed border-gray-200 hover:text-blue-700 transition-colors">
-                {isExpanded ? 'بستن لیست' : `مشاهده ${toPersianDigits(services.length - 2)} خدمت دیگر`}
-                <ChevronDown className={`w-4 h-4 mr-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-            </button>
         )}
       </div>
     </div>

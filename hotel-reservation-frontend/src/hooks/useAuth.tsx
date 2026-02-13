@@ -1,6 +1,7 @@
-// src/hooks/useAuth.tsx
-// version: 1.1.0
-// FIX: Updated 'register' and 'login' to return AuthResponse so pages can handle redirects logic.
+// FILE: src/hooks/useAuth.tsx
+// version: 1.1.1
+// FIX: Changed TOKEN_STORAGE_KEY to 'token' to match coreService interceptor.
+// FIX: This ensures logout correctly removes the token used by API requests.
 
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { login as apiLogin, register as apiRegister, AuthResponse, LoginData, RegisterData } from '../api/authService'; 
@@ -22,7 +23,6 @@ interface AuthContextType {
   isAuthenticated: boolean;
   user: AuthUser | null;
   token: string | null;
-  // [FIX]: Return type changed from Promise<void> to Promise<AuthResponse>
   login: (data: LoginData) => Promise<AuthResponse>;
   register: (data: RegisterData) => Promise<AuthResponse>;
   logout: () => void;
@@ -31,7 +31,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const TOKEN_STORAGE_KEY = 'authToken';
+// --- CRITICAL FIX: Key must match what coreService.ts reads ---
+const TOKEN_STORAGE_KEY = 'token'; 
+// -------------------------------------------------------------
 const USER_STORAGE_KEY = 'authUser';
 
 export const useAuth = () => {
@@ -75,26 +77,23 @@ export const useAuth = () => {
     }, [clearAuthData, setAuthData]);
 
     // Login API call
-    // [FIX]: Now returns the response object
     const login = useCallback(async (data: LoginData) => {
         const response = await apiLogin(data);
         setAuthData(response.token, response.user as AuthUser); 
-        // We removed router.push here because the Page component might want to handle redirection
-        // based on custom logic (like redirecting to a previous page).
         return response; 
     }, [setAuthData]);
 
     // Register API call
-    // [FIX]: Now returns the response object
     const register = useCallback(async (data: RegisterData) => {
         const response = await apiRegister(data);
         setAuthData(response.token, response.user as AuthUser); 
-        // We removed router.push('/') so the RegisterPage can handle the redirection logic itself.
         return response; 
     }, [setAuthData]);
 
     const logout = useCallback(() => {
         clearAuthData();
+        // جهت اطمینان بیشتر، اگر کلیدی با نام قدیمی وجود دارد هم پاک شود
+        localStorage.removeItem('authToken'); 
         router.push('/login'); 
     }, [clearAuthData, router]);
 

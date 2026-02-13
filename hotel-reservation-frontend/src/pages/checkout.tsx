@@ -1,22 +1,23 @@
-// src/pages/checkout.tsx
-// version: 6.0.0
-// REFACTOR: Fully componentized structure. Logic separated from UI.
+// FILE: src/pages/checkout.tsx
+// version: 6.2.0
+// REFACTOR: Integrated Tax (VAT) Calculation logic based on backend response.
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../hooks/useAuth';
+import { useBooking } from '../context/BookingContext'; 
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { calculateMultiPrice, MultiPriceData } from '../api/pricingService';
 import { createBooking, BookingPayload, GuestPayload } from '../api/reservationService';
 import { fetchHotelServices } from '../api/servicesService';
-import { CartItem, HotelService, SelectedServicePayload, BookingResponse } from '../types/hotel';
+import { HotelService, SelectedServicePayload, BookingResponse } from '../types/hotel';
 
 // UI Components
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import ServiceDetailsModal from '../components/checkout/ServiceDetailsModal';
 
-// New Modular Components
+// Modular Components
 import CheckoutCartSummary from '../components/checkout/CheckoutCartSummary';
 import CheckoutGuestSection from '../components/checkout/CheckoutGuestSection';
 import CheckoutServices from '../components/checkout/CheckoutServices';
@@ -27,11 +28,15 @@ const CheckoutPage: React.FC = () => {
     const router = useRouter();
     const { user, isAuthenticated } = useAuth();
     
-    // Core State
-    const [cart, setCart] = useState<CartItem[]>([]);
-    const [checkIn, setCheckIn] = useState('');
-    const [checkOut, setCheckOut] = useState('');
-    const [duration, setDuration] = useState(0);
+    // 1. Consumption of BookingContext
+    const { 
+        cart, 
+        checkIn, 
+        checkOut, 
+        duration, 
+        clearCart,
+        isLoading: isContextLoading 
+    } = useBooking();
     
     // Guest & Form State
     const [guests, setGuests] = useState<Partial<GuestPayload>[]>([]);
@@ -45,24 +50,57 @@ const CheckoutPage: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentService, setCurrentService] = useState<HotelService | null>(null);
 
-    // 1. Load Data from LocalStorage
-    useEffect(() => {
-        const storedCart = localStorage.getItem('bookingCart');
-        const storedCheckIn = localStorage.getItem('checkInDate');
-        const storedCheckOut = localStorage.getItem('checkOutDate');
-        const storedDuration = localStorage.getItem('duration');
+    // 2. Booking Mutation
+    const mutation = useMutation<BookingResponse, any, BookingPayload>({
+        mutationFn: (data: BookingPayload) => createBooking(data),
+        onSuccess: (data) => {
+            clearCart(); 
+            
+            if (data.payment_type === 'offline') {
+                 router.push(`/booking-success-transfer?booking_code=${data.booking_code}`);
+            } else {
+                 router.push(`/payment/${data.booking_code}`);
+            }
+        },            
+    
+        onError: (error: any) => {
+            console.error("Booking Error:", error);
+            let errorMessage = 'خطا در ثبت رزرو. لطفاً مجدداً تلاش کنید.';
+            const errorData = error.response?.data;
 
-        if (storedCart && storedCheckIn && storedCheckOut && storedDuration) {
-            setCart(JSON.parse(storedCart));
-            setCheckIn(storedCheckIn);
-            setCheckOut(storedCheckOut);
-            setDuration(parseInt(storedDuration, 10));
-        } else {
+            if (errorData) {
+                if (typeof errorData === 'object' && !errorData.error && !errorData.detail) {
+                    setValidationErrors(errorData);
+                } else {
+                    setValidationErrors({});
+                }
+
+                if (typeof errorData === 'string') errorMessage = errorData;
+                else if (errorData.error) errorMessage = errorData.error;
+                else if (errorData.detail) errorMessage = errorData.detail;
+                else if (typeof errorData === 'object') {
+                      if (errorData.non_field_errors) {
+                          errorMessage = Array.isArray(errorData.non_field_errors) 
+                            ? errorData.non_field_errors.join(' ') 
+                            : String(errorData.non_field_errors);
+                      } else {
+                          errorMessage = 'لطفاً اطلاعات فرم را بررسی و خطاهای مشخص شده را اصلاح کنید.';
+                      }
+                }
+            }
+            setError(errorMessage);
+        },
+        onSettled: () => setLoading(false),
+    });
+
+    // 3. Security Redirect Guard
+    useEffect(() => {
+        if (!isContextLoading && cart.length === 0 && !mutation.isSuccess) {
             router.push('/');
         }
-    }, [router]);
+    }, [cart, isContextLoading, router, mutation.isSuccess]);
     
-    // 2. Calculate Total Guests directly from Cart Items
+    // 4. Calculate Total Guests
     const totalGuests = useMemo(() => {
       return cart.reduce((total, item) => {
         const roomCapacity = item.room.base_capacity + item.extra_adults + item.children_count;
@@ -70,7 +108,7 @@ const CheckoutPage: React.FC = () => {
       }, 0);
     }, [cart]);
 
-    // 3. Initialize Guest Forms
+    // 5. Initialize Guest Forms
     useEffect(() => {
       if (totalGuests > 0 && guests.length !== totalGuests) {
         const newGuests = Array(totalGuests).fill({});
@@ -80,7 +118,7 @@ const CheckoutPage: React.FC = () => {
       }
     }, [totalGuests]);
 
-    // 4. Calculate Price
+    // 6. Pricing Calculation Query
     const { data: bookingDetails, isLoading: priceLoading } = useQuery<MultiPriceData>({
         queryKey: ['calculatePriceCheckout', cart, checkIn, checkOut, user],
         queryFn: () => {
@@ -94,8 +132,8 @@ const CheckoutPage: React.FC = () => {
             
             return calculateMultiPrice({
                 booking_rooms: bookingRoomsPayload,
-                check_in: checkIn,
-                check_out: checkOut,
+                check_in: checkIn!, 
+                check_out: checkOut!,
                 user_id: user?.id,
             });
         },
@@ -110,52 +148,6 @@ const CheckoutPage: React.FC = () => {
         queryKey: ['hotelServices', hotelId],
         queryFn: () => fetchHotelServices(hotelId!),
         enabled: !!hotelId,
-    });
-
-    const mutation = useMutation<BookingResponse, any, BookingPayload>({
-        mutationFn: (data: BookingPayload) => createBooking(data),
-        onSuccess: (data) => {
-            localStorage.removeItem('bookingCart');
-            if (data.payment_type === 'offline') {
-                 // Offline hotel flow (awaiting confirmation)
-                 router.push(`/booking-success-transfer?booking_code=${data.booking_code}`);
-            } else {
-                 // Online hotel flow (payment page)
-                 router.push(`/payment/${data.booking_code}`);
-            }
-        },            
-    
-        onError: (error: any) => {
-            console.error("Booking Error:", error);
-            let errorMessage = 'خطا در ثبت رزرو. لطفاً مجدداً تلاش کنید.';
-            const errorData = error.response?.data;
-
-            if (errorData) {
-                // [GEM-UPDATE] - Capture structured errors
-                if (typeof errorData === 'object' && !errorData.error && !errorData.detail) {
-                    setValidationErrors(errorData);
-                } else {
-                    setValidationErrors({});
-                }
-
-                // Determine general error message
-                if (typeof errorData === 'string') errorMessage = errorData;
-                else if (errorData.error) errorMessage = errorData.error;
-                else if (errorData.detail) errorMessage = errorData.detail;
-                else if (typeof errorData === 'object') {
-                     // If it's a validation error object
-                     if (errorData.non_field_errors) {
-                         errorMessage = Array.isArray(errorData.non_field_errors) 
-                            ? errorData.non_field_errors.join(' ') 
-                            : String(errorData.non_field_errors);
-                     } else {
-                         errorMessage = 'لطفاً اطلاعات فرم را بررسی و خطاهای مشخص شده را اصلاح کنید.';
-                     }
-                }
-            }
-            setError(errorMessage);
-        },
-        onSettled: () => setLoading(false),
     });
 
     // Handlers
@@ -198,6 +190,11 @@ const CheckoutPage: React.FC = () => {
             .filter(g => g.first_name && g.last_name)
             .map(g => ({ ...g, is_foreign: g.is_foreign || false })) as GuestPayload[];
 
+        if (!checkIn || !checkOut) {
+             setError('اطلاعات تاریخ رزرو یافت نشد.');
+             return;
+        }
+
         const payload: BookingPayload = {
             booking_rooms: cart.map(item => ({
                 room_type_id: item.room.id,
@@ -217,21 +214,51 @@ const CheckoutPage: React.FC = () => {
 
         setLoading(true);
         mutation.mutate(payload);
-    };   
+    };    
 
-    // Pricing Calcs for Summary
-    const totalServicesPrice = useMemo(() => {
-        return selectedServices.reduce((total, selected) => {
+    // --- Pricing Totals Logic (Updated for Tax) ---
+
+    // 1. Extract Room Financials from API
+    // If API isn't ready yet, fallback to cart calculation (without tax)
+    const roomNetPrice = bookingDetails?.total_room_price || cart.reduce((total, item) => total + item.total_price, 0);
+    const roomVat = bookingDetails?.total_vat || 0;
+    const taxRate = bookingDetails?.tax_percentage || 0; // Get Hotel Tax Rate
+
+    // 2. Calculate Services Financials (Base + Tax)
+    const { servicesTotal, servicesVat } = useMemo(() => {
+        let total = 0;
+        let vat = 0;
+
+        selectedServices.forEach(selected => {
             const serviceInfo = availableServices?.find(s => s.id === selected.id);
-            if (!serviceInfo) return total;
-            let price = (serviceInfo.pricing_model === 'PERSON') ? serviceInfo.price * selected.quantity : serviceInfo.price;
-            return total + price;
-        }, 0);
-    }, [selectedServices, availableServices]);
+            if (!serviceInfo) return;
 
-    const basePrice = useMemo(() => cart.reduce((total, item) => total + item.total_price, 0), [cart]);
-    const backendTotal = bookingDetails?.total_price ?? basePrice;
-    const finalTotalPrice = backendTotal + totalServicesPrice;
+            // Base Price
+            let price = (serviceInfo.pricing_model === 'PERSON') 
+                ? serviceInfo.price * selected.quantity 
+                : serviceInfo.price;
+            
+            total += price;
+
+            // Tax Calculation: Only if service is taxable AND hotel has tax rate
+            if (serviceInfo.is_taxable && taxRate > 0) {
+                vat += price * (taxRate / 100);
+            }
+        });
+
+        return { servicesTotal: total, servicesVat: vat };
+    }, [selectedServices, availableServices, taxRate]);
+
+    // 3. Final Aggregation
+    const finalVat = roomVat + servicesVat;
+    const finalTotalPrice = roomNetPrice + servicesTotal + finalVat;
+
+    // Loading State
+    if (isContextLoading) return (
+        <div className="flex items-center justify-center min-h-screen">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-brand"></div>
+        </div>
+    );
 
     return (
         <>
@@ -249,7 +276,7 @@ const CheckoutPage: React.FC = () => {
                             guests={guests} 
                             onGuestChange={handleGuestChange} 
                             isAuthenticated={!!isAuthenticated}
-			    validationErrors={validationErrors} 
+                            validationErrors={validationErrors} 
                         />
 
                         <CheckoutActions 
@@ -265,12 +292,13 @@ const CheckoutPage: React.FC = () => {
                 {/* RIGHT COLUMN: Summary & Services */}
                 <div className="lg:col-span-1 order-1 lg:order-2 space-y-6">
                     <CheckoutPriceSummary 
-                        checkIn={checkIn}
-                        checkOut={checkOut}
+                        checkIn={checkIn || ''}
+                        checkOut={checkOut || ''}
                         duration={duration}
-                        basePrice={backendTotal}
-                        totalServicesPrice={totalServicesPrice}
-                        finalPrice={finalTotalPrice}
+                        basePrice={roomNetPrice}       // قیمت خالص اتاق
+                        totalServicesPrice={servicesTotal} // قیمت خالص خدمات
+                        totalVat={finalVat}            // کل مالیات (اتاق + خدمات)
+                        finalPrice={finalTotalPrice}   // مبلغ قابل پرداخت
                         isLoading={priceLoading}
                     />
 
@@ -302,4 +330,3 @@ const CheckoutPage: React.FC = () => {
 };
 
 export default CheckoutPage;
-

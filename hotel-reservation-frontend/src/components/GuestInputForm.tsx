@@ -1,7 +1,8 @@
-// src/components/GuestInputForm.tsx
-// version: 2.2.0
-// FIX: Moved 'is_foreign' checkbox to the top.
-// Feature: Added 'errors' prop and connected to Input components.
+// FILE: src/components/GuestInputForm.tsx
+// version: 2.3.0
+// FIX: Restored 'phone_number' field visibility.
+// FIX: Separated logic for 'national_id' vs 'passport_number' & 'nationality'.
+// FEAT: Added 'gender' field to match API requirements.
 
 import React, { memo } from 'react'; 
 import { Input } from './ui/Input'; 
@@ -13,10 +14,8 @@ interface GuestInputFormProps {
     isPrincipal: boolean;
     value: Partial<GuestPayload>; 
     containerClass?: string;
-    // Prop to indicate if the user is unauthenticated (Guest Booking flow)
     isUnauthenticated?: boolean; 
-    // NEW: Receive validation errors for this specific guest form
-    errors?: Record<string, string>; 
+    errors?: any; // Changed to any to handle flexible error structures
 }
 
 const GuestInputForm = ({ 
@@ -31,155 +30,199 @@ const GuestInputForm = ({
     
     const guestData = value; 
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value, type, checked } = e.target;
-        
-        let newValue: string | boolean = type === 'checkbox' ? checked : value;
+    // Helper to safely extract error message
+    const getFieldError = (fieldName: string) => {
+        if (!errors) return undefined;
+        // Handle Django DRF array errors (e.g., { phone_number: ["Invalid format"] })
+        if (Array.isArray(errors[fieldName])) return errors[fieldName][0];
+        return errors[fieldName];
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        // Handle checkbox vs text/select
+        const checked = (e.target as HTMLInputElement).checked;
         
         let updatedData: Partial<GuestPayload> = {};
 
-        // Handle is_foreign logic which affects multiple fields
+        // 1. Logic for switching between Iranian/Foreign guest
         if (name === 'is_foreign') {
-            const isForeignValue = newValue as boolean;
+            const isForeignValue = checked;
 
             updatedData = {
                 is_foreign: isForeignValue,
-                // Clearing dependent fields in the parent state manager
-                national_id: isForeignValue ? '' : guestData.national_id, 
-                passport_number: isForeignValue ? guestData.passport_number : '',
-                nationality: isForeignValue ? guestData.nationality : '',
-                // Preserve wants_to_register state
-                wants_to_register: guestData.wants_to_register
+                // If switching to Foreign: Clear National ID
+                // If switching to Iranian: Clear Passport & Nationality
+                national_id: isForeignValue ? null : '', 
+                passport_number: isForeignValue ? '' : null,
+                nationality: isForeignValue ? '' : null,
+                // Preserve other fields
             };
-        } else if (name === 'wants_to_register') {
-             // Handle the new wants_to_register checkbox
-            updatedData = { [name]: checked } as Partial<GuestPayload>;
         } 
+        // 2. Logic for Registration Checkbox
+        else if (name === 'wants_to_register') {
+            updatedData = { [name]: checked };
+        } 
+        // 3. Standard Fields (Name, Phone, Passport, etc.)
         else {
-            // For other fields, send a single field update
-            const stringValue = newValue as string;
-            updatedData = { [name]: stringValue } as Partial<GuestPayload>;
+            updatedData = { [name]: value };
         }
         
-        // Notify parent to update the central state array
+        // Notify parent
         onChange(index, updatedData);
     };
 
     const isForeign = guestData.is_foreign || false;
     
-    const isPhoneNumberRequired = isPrincipal;
-    const isNationalIdRequired = isPrincipal && !isForeign;
-    const isPassportRequired = isPrincipal && isForeign;
-    const isNationalityRequired = isPrincipal && isForeign;
-    // Name/Last Name are required only for the principal guest
+    // Validation Rules (Visual Indication)
     const isNameRequired = isPrincipal; 
+    const isPhoneNumberRequired = isPrincipal; // Mobile is required for the booker
+    const isNationalIdRequired = !isForeign; // Required if Iranian
+    const isPassportRequired = isForeign; // Required if Foreign
+    const isNationalityRequired = isForeign; // Required if Foreign
 
     const guestTitle = isPrincipal ? `اطلاعات میهمان ${index + 1} (سرپرست)` : `اطلاعات میهمان ${index + 1}`;
-    
-    // Determine background class: use prop if provided, else default to bg-gray-50
     const bgColor = containerClass || 'bg-gray-50'; 
 
-
     return (
-        // Apply dynamic background class
-        <div className={`p-4 border border-gray-200 rounded-lg ${bgColor} mb-4`} dir="rtl">
-            <h4 className="text-lg font-bold mb-4 text-primary-brand">{guestTitle}</h4>
-            
-            {/* NEW LOCATION: Foreign checkbox moved to top */}
-            <div className="flex items-center mb-6">
-                <input 
-                    type="checkbox" 
-                    name="is_foreign" 
-                    checked={isForeign} 
-                    onChange={handleChange} 
-                    className="w-4 h-4 text-primary-brand border-gray-300 rounded focus:ring-primary-brand ml-2"
-                    id={`is_foreign_${index}`}
-                />
-                <label htmlFor={`is_foreign_${index}`} className="text-sm font-medium cursor-pointer">
-                    این میهمان خارجی است
-                </label>
+        <div className={`p-4 border border-gray-200 rounded-lg ${bgColor} mb-4 transition-all duration-300`} dir="rtl">
+            <div className="flex justify-between items-center mb-4">
+                <h4 className="text-lg font-bold text-primary-brand flex items-center gap-2">
+                    {guestTitle}
+                    {isPrincipal && <span className="text-xs text-red-500 bg-red-50 px-2 py-1 rounded-full">الزامی</span>}
+                </h4>
+
+                {/* --- TOGGLE: Foreign National --- */}
+                <div className="flex items-center bg-white px-3 py-1 rounded border border-gray-200">
+                    <input 
+                        type="checkbox" 
+                        name="is_foreign" 
+                        checked={isForeign} 
+                        onChange={handleChange} 
+                        className="w-4 h-4 text-primary-brand border-gray-300 rounded focus:ring-primary-brand ml-2 cursor-pointer"
+                        id={`is_foreign_${index}`}
+                    />
+                    <label htmlFor={`is_foreign_${index}`} className="text-sm font-medium cursor-pointer text-gray-700 select-none">
+                        اتباع خارجی هستم
+                    </label>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Name fields - REQUIRED ONLY IF isPrincipal is TRUE */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* 1. Name */}
                 <Input 
                     label="نام" 
                     name="first_name" 
-                    required={isNameRequired}
+                    required={true}
                     onChange={handleChange} 
                     value={guestData.first_name || ''}
-                    error={errors.first_name}
+                    error={getFieldError('first_name')}
                 />
+                
+                {/* 2. Last Name */}
                 <Input 
                     label="نام خانوادگی" 
                     name="last_name" 
-                    required={isNameRequired}
+                    required={true}
                     onChange={handleChange} 
                     value={guestData.last_name || ''}
-                    error={errors.last_name}
+                    error={getFieldError('last_name')}
                 />
+
+                {/* 3. Gender (Added based on API requirements) */}
+                <div className="w-full">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        جنسیت <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                        name="gender"
+                        value={guestData.gender || ''}
+                        onChange={handleChange}
+                        className={`w-full h-12 px-3 border rounded-md shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${getFieldError('gender') ? 'border-red-500' : 'border-gray-300'}`}
+                    >
+                        <option value="" disabled>انتخاب کنید</option>
+                        <option value="M">مرد</option>
+                        <option value="F">زن</option>
+                    </select>
+                    {getFieldError('gender') && (
+                        <p className="mt-1 text-xs text-red-600">{getFieldError('gender')}</p>
+                    )}
+                </div>
                 
-                {/* Phone Number - Required only for the principal guest */}
+                {/* 4. Phone Number (CRITICAL: Must be present) */}
                 <Input 
-                    label="شماره تماس" 
+                    label="شماره موبایل" 
                     name="phone_number" 
                     required={isPhoneNumberRequired} 
                     onChange={handleChange} 
                     value={guestData.phone_number || ''}
-                    error={errors.phone_number}
+                    error={getFieldError('phone_number')}
+                    placeholder="0912..."
+                    dir="ltr"
+                    className="text-left"
                 />
             </div>
             
-            <div className='grid grid-cols-1 md:grid-cols-3 gap-4 mt-4'>
-                {/* City of Origin */}
+            <div className='grid grid-cols-1 md:grid-cols-4 gap-4 mt-4'>
+                {/* 5. Identification Documents (Switch based on Foreign Status) */}
+                {!isForeign ? (
+                    // --- IRANIAN MODE ---
+                    <div className="md:col-span-2">
+                        <Input 
+                            label="کد ملی" 
+                            name="national_id" 
+                            required={isNationalIdRequired} 
+                            onChange={handleChange} 
+                            value={guestData.national_id || ''}
+                            error={getFieldError('national_id')}
+                            maxLength={10}
+                            placeholder="۱۰ رقم بدون خط تیره"
+                            dir="ltr"
+                            className="text-left tracking-widest"
+                        />
+                    </div>
+                ) : (
+                    // --- FOREIGN MODE ---
+                    <>
+                        <div className="md:col-span-1">
+                            <Input 
+                                label="شماره پاسپورت" 
+                                name="passport_number" 
+                                required={isPassportRequired} 
+                                onChange={handleChange} 
+                                value={guestData.passport_number || ''}
+                                error={getFieldError('passport_number')}
+                                dir="ltr"
+                                className="text-left"
+                            />
+                        </div>
+                        <div className="md:col-span-1">
+                             <Input 
+                                label="کشور تابعیت" 
+                                name="nationality" 
+                                required={isNationalityRequired} 
+                                onChange={handleChange} 
+                                value={guestData.nationality || ''}
+                                error={getFieldError('nationality')}
+                                placeholder="مثلا: عراق"
+                            />
+                        </div>
+                    </>
+                )}
+
+                 {/* 6. City (Optional) */}
                  <Input 
-                    label="شهر مبدأ" 
+                    label="شهر محل سکونت" 
                     name="city_of_origin" 
                     required={false} 
                     onChange={handleChange} 
                     value={guestData.city_of_origin || ''}
-                    error={errors.city_of_origin}
+                    error={getFieldError('city_of_origin')}
                 />
 
-                {/* --- Conditional Fields for National/Passport/Nationality --- */}
-
-                {!isForeign ? (
-                    // Iranian Fields: Show National ID
-                    <Input 
-                        label="کد ملی" 
-                        name="national_id" 
-                        required={isNationalIdRequired} 
-                        onChange={handleChange} 
-                        value={guestData.national_id || ''}
-                        error={errors.national_id}
-                    />
-                ) : (
-                    <>
-                        {/* Foreign Fields: Show Passport and Nationality */}
-                        <Input 
-                            label="شماره پاسپورت" 
-                            name="passport_number" 
-                            required={isPassportRequired} 
-                            onChange={handleChange} 
-                            value={guestData.passport_number || ''}
-                            error={errors.passport_number}
-                        />
-                        
-                        <Input 
-                            label="تابعیت" 
-                            name="nationality" 
-                            required={isNationalityRequired} 
-                            onChange={handleChange} 
-                            value={guestData.nationality || ''}
-                            error={errors.nationality}
-                        />
-                    </>
-                )}
-
-                 {/* Placeholder for alignment or Registration Option */}
+                {/* 7. Registration Option (Only for Unauthenticated Principal) */}
                  {isPrincipal && isUnauthenticated ? (
-                    // Show register option for unauthenticated principal guest
-                    <div className="flex items-center mt-6 md:col-start-3">
+                    <div className="flex items-center mt-8 md:col-start-4 justify-end">
                         <input
                             type="checkbox"
                             name="wants_to_register"
@@ -188,12 +231,12 @@ const GuestInputForm = ({
                             className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 ml-2"
                             id={`register_${index}`}
                         />
-                        <label htmlFor={`register_${index}`} className="text-sm font-medium text-green-700 cursor-pointer">
-                            ثبت نام در سایت با این اطلاعات
+                        <label htmlFor={`register_${index}`} className="text-sm font-bold text-green-700 cursor-pointer">
+                            عضویت در سایت
                         </label>
                     </div>
                 ) : (
-                    <div></div> // Ensures alignment if option is hidden
+                    <div></div> 
                 )}
             </div>
         </div>

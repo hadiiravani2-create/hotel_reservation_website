@@ -1,69 +1,80 @@
-// src/components/checkout/CheckoutActions.tsx
-// version: 1.1.0
-// FIX: Imported 'Link' from 'next/link' to resolve ReferenceError. Added target="_blank" to keep user context.
+// FILE: src/components/checkout/CheckoutActions.tsx
+// version: 6.2.2
+// FIX: Removed 'isLoading' prop from Button component to resolve TypeScript error.
+//      Loading state is handled via 'disabled' prop and button children text.
 
 import React from 'react';
-import Link from 'next/link'; // <--- این خط اضافه شد
-import { Button } from '../ui/Button';
-import { CheckCircle, Info } from 'lucide-react';
+import { Button } from '../ui/Button'; 
+import { AlertCircle, FileText, Lock } from 'lucide-react';
 
 interface CheckoutActionsProps {
   rulesAccepted: boolean;
   setRulesAccepted: (val: boolean) => void;
   onSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
-  error: string;
+  error?: string;
 }
 
-const CheckoutActions: React.FC<CheckoutActionsProps> = ({ 
-  rulesAccepted, 
-  setRulesAccepted, 
-  onSubmit, 
-  isLoading, 
-  error 
+const CheckoutActions: React.FC<CheckoutActionsProps> = ({
+  rulesAccepted,
+  setRulesAccepted,
+  onSubmit,
+  isLoading,
+  error
 }) => {
   return (
-    <div className="mt-8 pt-6">
-        <div className="flex items-start gap-3 mb-6 p-4 bg-gray-50 rounded-lg border">
-            <input 
-                type="checkbox" 
-                id="rules"
-                checked={rulesAccepted} 
-                onChange={(e) => setRulesAccepted(e.target.checked)} 
-                className="mt-1 w-5 h-5 text-primary-brand border-gray-300 rounded focus:ring-primary-brand cursor-pointer" 
+    <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 mt-6">
+      
+      {/* بخش قوانین و مقررات */}
+      <div className="mb-6">
+        <label className="flex items-start gap-3 cursor-pointer group">
+          <div className="relative flex items-center">
+            <input
+              type="checkbox"
+              checked={rulesAccepted}
+              onChange={(e) => setRulesAccepted(e.target.checked)}
+              className="w-5 h-5 border-2 border-gray-300 rounded text-primary-brand focus:ring-primary-brand/30 transition-colors"
             />
-            <label htmlFor="rules" className="text-sm text-gray-700 cursor-pointer leading-6 select-none">
-                <span className="font-bold text-gray-900">
-                    <Link href="/booking-rules" target="_blank" className="text-indigo-600 hover:underline mx-1">
-                        قوانین و مقررات
-                    </Link>
-                </span> 
-                رزرو هتل را به دقت مطالعه کرده و می‌پذیرم.
-                مسئولیت صحت اطلاعات وارد شده بر عهده کاربر می‌باشد.
-            </label>
+          </div>
+          <div className="text-sm text-gray-600 leading-6 select-none">
+            اینجانب ضمن مطالعه دقیق، کلیه{' '}
+            <a href="/booking-rules" target="_blank" className="text-blue-600 hover:underline font-bold inline-flex items-center gap-1">
+              <FileText className="w-3 h-3" />
+              قوانین و مقررات رزرو
+            </a>{' '}
+            و شرایط کنسلی هتل را پذیرفته و تایید می‌نمایم.
+          </div>
+        </label>
+      </div>
+
+      {/* نمایش خطای عمومی (اگر وجود داشته باشد) */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 animate-shake">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700 font-medium">{error}</p>
+        </div>
+      )}
+
+      {/* دکمه پرداخت */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t pt-6">
+        <div className="flex items-center gap-2 text-gray-500 text-xs">
+          <Lock className="w-4 h-4" />
+          <span>پرداخت امن از طریق درگاه‌های بانکی عضو شتاب</span>
         </div>
         
-        {error && (
-            <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 border border-red-100 flex items-center gap-2">
-                <Info className="w-5 h-5"/>
-                {error}
-            </div>
-        )}
-
-        <Button 
-            onClick={onSubmit} 
-            disabled={isLoading || !rulesAccepted} 
-            className="w-full py-4 text-lg font-bold shadow-xl shadow-blue-500/20 flex items-center justify-center gap-2"
-        >
-            {isLoading ? (
-                'در حال پردازش...'
-            ) : (
-                <>
-                    <CheckCircle className="w-5 h-5" />
-                    تایید نهایی و پرداخت
-                </>
-            )}
-        </Button>
+        <div className="w-full md:w-auto">
+          <Button
+            type="submit"
+            onClick={onSubmit}
+            // isLoading={isLoading} <--- REMOVED: Caused TypeError
+            disabled={!rulesAccepted || isLoading}
+            className={`w-full md:w-64 h-12 text-lg shadow-lg shadow-blue-500/30 ${!rulesAccepted ? 'opacity-50 cursor-not-allowed' : ''}`}
+            variant="primary"
+          >
+            {isLoading ? 'در حال پردازش...' : 'تایید نهایی و پرداخت'}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

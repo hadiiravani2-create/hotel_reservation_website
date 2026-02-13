@@ -46,7 +46,10 @@ export interface MultiPriceData {
   check_out: string;
   booking_rooms: any[]; // Simplified for brevity, detailed in input
   user_id?: number | null;
-  total_price: number;
+  total_room_price: number; // قیمت خالص اتاق‌ها (بدون مالیات)
+  total_vat: number;        // مجموع مالیات محاسبه شده برای اتاق‌ها
+  total_price: number;      // قیمت نهایی (شامل همه موارد)
+  tax_percentage?: number;
 }
 
 export interface CityOption {

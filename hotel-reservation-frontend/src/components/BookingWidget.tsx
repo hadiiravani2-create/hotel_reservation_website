@@ -1,8 +1,6 @@
-// src/components/BookingWidget.tsx
-// version: 1.2.0
-// FEAT: Shows 'extra_adults' and 'children_count' badges in cart items.
-// FIX: Uses 'formatPrice' and 'toPersianDigits' for correct formatting.
-// FIX: Integrated JalaliDatePicker controlled props (value/onChange).
+// FILE: src/components/BookingWidget.tsx
+// version: 1.2.1
+// REFACTOR: Replaced direct localStorage manipulation with BookingContext.
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
@@ -12,8 +10,8 @@ import { DATE_CONFIG } from '@/config/date';
 import { Button } from './ui/Button';
 import { JalaliDatePicker } from './ui/JalaliDatePicker';
 import { AvailableRoom, CartItem } from '@/types/hotel';
-// NEW: Import formatting utilities
 import { formatPrice, toPersianDigits } from '@/utils/format';
+import { useBooking } from '@/context/BookingContext'; // IMPORT ADDED
 
 interface BookingWidgetProps {
   hotelSlug: string;
@@ -26,18 +24,16 @@ interface BookingWidgetProps {
 
 const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, setIsLoading, cartItems, onRemoveFromCart, userId }) => {
   const router = useRouter();
+  const { setBookingData } = useBooking(); // HOOK USE
   const { check_in: checkInQuery, duration: durationQuery } = router.query;
   
-  // Initialize Check-in Date from URL or default to null
   const [checkIn, setCheckIn] = useState<DateObject | null>(
     checkInQuery ? new DateObject({ date: checkInQuery as string, ...DATE_CONFIG }) : null
   );
   
-  // Initialize Duration from URL or default to 1
   const [duration, setDuration] = useState<number>(parseInt(durationQuery as string, 10) || 1);
   const [checkOut, setCheckOut] = useState<DateObject | null>(null);
 
-  // Calculate Check-out date whenever Check-in or Duration changes
   useEffect(() => {
     if (checkIn) {
       const newCheckOut = new DateObject(checkIn).add(duration, "days");
@@ -67,7 +63,6 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
       const data = await response.json();
       onRoomsFetch(data.available_rooms || []);
       
-      // Update URL without reloading page
       router.push(`/hotels/${hotelSlug}?${queryParams}`, undefined, { shallow: true });
 
     } catch (error) {
@@ -89,11 +84,13 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
         return;
     }
     
-    // Save booking details to local storage for checkout page
-    localStorage.setItem('bookingCart', JSON.stringify(cartItems));
-    localStorage.setItem('checkInDate', checkIn.format("YYYY-MM-DD"));
-    localStorage.setItem('checkOutDate', checkOut.format("YYYY-MM-DD"));
-    localStorage.setItem('duration', duration.toString());
+    // REFACTOR: Using Context instead of direct localStorage
+    // This ensures data flow is managed by React, not the browser storage directly
+    setBookingData(
+        cartItems,
+        checkIn.format("YYYY-MM-DD"),
+        duration
+    );
     
     router.push('/checkout');
   };
@@ -101,7 +98,6 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
   // Calculate total price of all items in cart
   const totalCartPrice = cartItems.reduce((total, item) => total + item.total_price, 0);
 
-  // Date Change Handler
   const handleDateChange = (date: DateObject | null) => {
     setCheckIn(date);
   };
@@ -110,7 +106,6 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
     <div className="bg-white p-6 rounded-lg shadow-lg border sticky top-8 transition-all duration-300">
       <div className="space-y-4">
         
-        {/* Date Picker Input */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">تاریخ ورود</label>
           <JalaliDatePicker
@@ -121,7 +116,6 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
           />
         </div>
 
-        {/* Duration Select */}
         <div>
           <label htmlFor="duration-select" className="block text-sm font-medium text-gray-700 mb-1">مدت اقامت (شب)</label>
           <select
@@ -139,7 +133,6 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
         <Button onClick={handleSearch} className="w-full shadow-md">جستجوی اتاق‌ها</Button>
       </div>
 
-      {/* Cart Items Section */}
       {cartItems.length > 0 && (
         <div className="mt-6 pt-6 border-t border-gray-100 animate-fadeIn">
           <h3 className="font-bold text-lg mb-4 text-gray-800 border-r-4 border-primary-brand pr-2">سبد خرید شما</h3>
@@ -154,7 +147,6 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
                         {item.selected_board.name} | {toPersianDigits(item.quantity)} اتاق
                     </p>
                     
-                    {/* NEW: Display Extras Badges */}
                     {(item.extra_adults > 0 || item.children_count > 0) && (
                         <div className="flex flex-wrap gap-1 mt-2">
                             {item.extra_adults > 0 && (
@@ -182,11 +174,10 @@ const BookingWidget: React.FC<BookingWidgetProps> = ({ hotelSlug, onRoomsFetch, 
                   </button>
                 </div>
                 
-                {/* Price Display */}
                 <div className="mt-2 text-left pt-2 border-t border-gray-200 border-dashed">
-                     <span className="font-bold text-primary-brand text-xs">
-                         {formatPrice(item.total_price)} ریال
-                     </span>
+                      <span className="font-bold text-primary-brand text-xs">
+                          {formatPrice(item.total_price)} ریال
+                      </span>
                 </div>
               </div>
             ))}

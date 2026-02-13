@@ -64,11 +64,13 @@ export interface ServiceType {
 
 export interface HotelService {
   id: number;
+  hotel: number;
   name: string;
   description: string;
   pricing_model: 'PERSON' | 'BOOKING' | 'FREE';
   price: number;
   service_type: ServiceType;
+  is_taxable: boolean;
 }
 
 export interface Amenity {
