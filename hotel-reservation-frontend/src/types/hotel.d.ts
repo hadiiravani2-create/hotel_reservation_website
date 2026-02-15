@@ -142,6 +142,21 @@ export interface BedType {
     slug: string;
 }
 
+export interface RoomType {
+  id: number;
+  hotel?: number; // علامت سوال برای سازگاری در صورتی که در برخی ریسپانس‌ها نباشد
+  name: string;
+  code?: string;
+  description?: string | null;
+  base_capacity: number;
+  extra_capacity: number;
+  child_capacity: number;
+  price_per_night?: number;
+  extra_person_price?: number;
+  child_price?: number;
+  priority?: number;
+}
+
 export interface AvailableRoom {
   id: number;
   name: string;

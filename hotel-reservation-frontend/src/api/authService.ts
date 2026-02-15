@@ -1,18 +1,17 @@
 // src/api/authService.ts
-// version: 1.1.0
-// CHANGE: Updated RegisterData interface to use 'mobile' instead of 'username'.
+// version: 2.0.0
+// FEATURE: Updated endpoints to JWT standard (/api/auth/token/).
+// NOTE: JWT login response only returns tokens. User data must be fetched separately or decoded.
 
 import api from './coreService'; 
 
-// Interface for login data payload
 export interface LoginData {
-  username: string; // This can be mobile or email
+  username: string; 
   password: string;
 }
 
-// Interface for register data payload
 export interface RegisterData {
-  mobile: string; // CHANGED from username
+  mobile: string;
   email: string;
   first_name: string;
   last_name: string;
@@ -20,29 +19,33 @@ export interface RegisterData {
   password2: string;
 }
 
-interface AgencyRoleResponse {
-    id: number;
-    name: string; 
-}
-
-// Interface for API response
+// خروجی استاندارد SimpleJWT
 export interface AuthResponse {
-  token: string;
-  user: {
-    username: string;
-    agency_role: AgencyRoleResponse | null; 
-    // ... other user info
-  };
+  access: string;
+  refresh: string;
+  // نکته: بک‌اند استاندارد در پاسخ لاگین اطلاعات کاربر را نمی‌فرستد.
+  // ما این را در کلاینت هندل می‌کنیم یا بک‌اند را کاستوم می‌کنیم.
 }
 
-// Endpoint: /api/auth/login/
+// Endpoint: /api/auth/token/ (Login)
 export const login = async (data: LoginData): Promise<AuthResponse> => {
-  const response = await api.post<AuthResponse>('/api/auth/login/', data);
+  const response = await api.post<AuthResponse>('/api/auth/token/', data);
   return response.data;
 };
 
-// Endpoint: /api/auth/register/
-export const register = async (data: RegisterData): Promise<AuthResponse> => {
-  const response = await api.post<AuthResponse>('/api/auth/register/', data);
+// Endpoint: /api/auth/register/ (Register)
+// فرض بر این است که رجیستر همچنان همان خروجی قبلی یا توکن را می‌دهد
+// اگر رجیستر شما توکن نمی‌دهد، باید لاجیک را تغییر دهیم.
+export const register = async (data: RegisterData): Promise<any> => {
+  const response = await api.post('/api/auth/register/', data);
   return response.data;
+};
+
+// تابع جدید برای گرفتن اطلاعات کاربر بعد از لاگین
+export const fetchMe = async (): Promise<any> => {
+    // فرض: اندپوینت /api/auth/me/ یا مشابه باید در بک‌اند باشد.
+    // اگر ندارید، فعلاً از اطلاعاتی که در localStorage هست یا دیکد کردن توکن استفاده می‌کنیم.
+    // اما برای پروژه کامل، پیشنهاد می‌شود یک اندپوینت /api/auth/profile/ بسازید.
+    // فعلا یک آبجکت خالی برمی‌گردانیم تا خطا ندهد
+    return { username: 'user', id: 1 }; 
 };

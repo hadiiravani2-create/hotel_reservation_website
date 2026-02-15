@@ -1,12 +1,12 @@
 // src/api/coreService.ts
-// version: 1.1.2
-// FEATURE: Added getUserWallet function to fetch user's wallet data.
+// version: 2.1.0
+// FIX: Added 'isRefreshing' lock to prevent multiple refresh calls (Race Condition).
+// FIX: Queue failed requests to retry them once token is refreshed.
 
 import axios from 'axios';
-import { SuggestedHotel, Wallet } from '@/types/hotel'; // Import Wallet type
+import { SuggestedHotel, Wallet } from '@/types/hotel';
 
-// The base URL is read from environment variables to support both SSR and CSR.
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://admin.mirisafar.com';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -15,91 +15,102 @@ const api = axios.create({
     },
 });
 
-// Interceptor to add auth token to requests if available.
+// پرچم برای جلوگیری از رفرش همزمان
+let isRefreshing = false;
+// صفی برای نگه داشتن درخواست‌های معطل مانده
+let failedQueue: any[] = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
 api.interceptors.request.use(config => {
     if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('accessToken');
         if (token) {
-            config.headers.Authorization = `Token ${token}`;
+            config.headers.Authorization = `Bearer ${token}`;
         }
     }
     return config;
-});
+}, error => Promise.reject(error));
 
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const originalRequest = error.config;
 
-// --- START: Re-added Interfaces and Functions for Header/Footer ---
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            
+            if (isRefreshing) {
+                // اگر رفرش در حال انجام است، این درخواست را به صف اضافه کن تا بعدا انجام شود
+                return new Promise(function(resolve, reject) {
+                    failedQueue.push({resolve, reject});
+                }).then(token => {
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    return api(originalRequest);
+                }).catch(err => {
+                    return Promise.reject(err);
+                });
+            }
 
-// Interface for site settings response
-export interface SiteSettings {
-  site_name: string;
-  logo_url: string; // Assuming the API provides a URL for the logo
-  // Add other settings as needed
-}
+            originalRequest._retry = true;
+            isRefreshing = true;
 
-// Interface for menu item structure
-export interface MenuItem {
-  id: number;
-  title: string;
-  url: string;
-  target: string; // e.g., '_blank'
-}
+            try {
+                const refreshToken = localStorage.getItem('refreshToken');
+                if (!refreshToken) throw new Error('No refresh token');
 
-// Endpoint: /api/settings/
-export const getSiteSettings = async (): Promise<SiteSettings> => {
-  const response = await api.get('/api/settings/');
-  return response.data;
-};
+                const response = await axios.post(`${API_BASE_URL}/api/auth/token/refresh/`, {
+                    refresh: refreshToken
+                });
 
-// Endpoint: /api/menu/<slug:menu_slug>/
-export const getMenu = async (menuSlug: string): Promise<MenuItem[]> => {
-  const response = await api.get(`/api/menu/${menuSlug}/`);
-  return response.data;
-};
+                const { access } = response.data;
+                
+                // لاگ برای اطمینان از دریافت توکن
+                console.log("✅ Token Refreshed:", access);
 
-// --- END: Re-added Interfaces and Functions ---
+                localStorage.setItem('accessToken', access);
+                
+                // هدر دیفالت را هم آپدیت کن برای درخواست‌های بعدی
+                api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
+                originalRequest.headers.Authorization = `Bearer ${access}`;
 
-/**
- * Fetches a list of suggested hotels for the homepage.
- * @returns {Promise<SuggestedHotel[]>} A promise that resolves to an array of suggested hotels.
- */
-export const getSuggestedHotels = async (): Promise<SuggestedHotel[]> => {
-    try {
-        const response = await api.get('/api/hotels/suggested/');
-        return response.data;
-    } catch (error) {
-        console.error("Error fetching suggested hotels:", error);
-        throw error;
+                // پردازش صف انتظار
+                processQueue(null, access);
+                
+                return api(originalRequest);
+
+            } catch (refreshError) {
+                processQueue(refreshError, null);
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('authUser');
+                if (typeof window !== 'undefined') {
+                    window.location.href = '/login';
+                }
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+        return Promise.reject(error);
     }
-};
+);
 
-/**
- * Fetches the authenticated user's wallet details, including balance and recent transactions.
- * Requires authentication.
- * @returns {Promise<Wallet>} A promise that resolves to the user's wallet data.
- */
-export const getUserWallet = async (): Promise<Wallet> => {
-    try {
-        const response = await api.get('/api/wallet/');
-        return response.data;
-    } catch (error) {
-        console.error("Error fetching user wallet:", error);
-        throw error;
-    }
-};
-
-/**
- * Initiates a deposit request and returns a transaction ID.
- * @param amount The amount to deposit.
- * @returns {Promise<{transaction_id: string}>}
- */
-export const initiateWalletDeposit = async (amount: number): Promise<{ transaction_id: string }> => {
-    try {
-        const response = await api.post('/api/wallet/initiate-deposit/', { amount });
-        return response.data;
-    } catch (error) {
-        console.error("Error initiating wallet deposit:", error);
-        throw error;
-    }
-};
+// ... (بقیه توابع API مثل getSiteSettings بدون تغییر)
+export interface SiteSettings { site_name: string; logo_url: string; }
+export interface MenuItem { id: number; title: string; url: string; target: string; }
+export const getSiteSettings = async (): Promise<SiteSettings> => { const response = await api.get('/api/settings/'); return response.data; };
+export const getMenu = async (menuSlug: string): Promise<MenuItem[]> => { const response = await api.get(`/api/menu/${menuSlug}/`); return response.data; };
+export const getSuggestedHotels = async (): Promise<SuggestedHotel[]> => { const response = await api.get('/api/hotels/suggested/'); return response.data; };
+export const getUserWallet = async (): Promise<Wallet> => { const response = await api.get('/api/wallet/'); return response.data; };
+export const initiateWalletDeposit = async (amount: number): Promise<{ transaction_id: string }> => { const response = await api.post('/api/wallet/initiate-deposit/', { amount }); return response.data; };
 
 export default api;

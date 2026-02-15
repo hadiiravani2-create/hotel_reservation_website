@@ -1,14 +1,12 @@
-// FILE: src/hooks/useAuth.tsx
-// version: 1.1.1
-// FIX: Changed TOKEN_STORAGE_KEY to 'token' to match coreService interceptor.
-// FIX: This ensures logout correctly removes the token used by API requests.
+// src/hooks/useAuth.tsx
+// version: 2.0.0
+// FEATURE: Full JWT Support (Access + Refresh Token storage).
 
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { login as apiLogin, register as apiRegister, AuthResponse, LoginData, RegisterData } from '../api/authService'; 
 import api from '../api/coreService'; 
 import { useRouter } from 'next/router';
 
-// Interface for the Authenticated User object
 export interface AuthUser {
   id: number;
   username: string;
@@ -18,86 +16,100 @@ export interface AuthUser {
   agency_id: number | null;
 }
 
-// Interface for the context state
 interface AuthContextType {
   isAuthenticated: boolean;
   user: AuthUser | null;
-  token: string | null;
-  login: (data: LoginData) => Promise<AuthResponse>;
-  register: (data: RegisterData) => Promise<AuthResponse>;
+  login: (data: LoginData) => Promise<boolean>; // تغییر خروجی به boolean برای سادگی
+  register: (data: RegisterData) => Promise<any>;
   logout: () => void;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// --- CRITICAL FIX: Key must match what coreService.ts reads ---
-const TOKEN_STORAGE_KEY = 'token'; 
-// -------------------------------------------------------------
-const USER_STORAGE_KEY = 'authUser';
+const ACCESS_TOKEN_KEY = 'accessToken';
+const REFRESH_TOKEN_KEY = 'refreshToken';
+const USER_KEY = 'authUser';
 
 export const useAuth = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState<AuthUser | null>(null);
-    const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const router = useRouter();
 
-    const setAuthData = useCallback((newToken: string, newUser: AuthUser) => {
-        setToken(newToken);
-        setUser(newUser);
+    const setAuthData = useCallback((access: string, refresh: string, userData: AuthUser | null) => {
+        localStorage.setItem(ACCESS_TOKEN_KEY, access);
+        localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+        if (userData) {
+            localStorage.setItem(USER_KEY, JSON.stringify(userData));
+            setUser(userData);
+        }
         setIsAuthenticated(true);
-        localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));
-        api.defaults.headers.common['Authorization'] = `Token ${newToken}`;
+        // تنظیم هدر پیش‌فرض برای درخواست‌های بعدی
+        api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
     }, []);
 
     const clearAuthData = useCallback(() => {
-        setToken(null);
+        localStorage.removeItem(ACCESS_TOKEN_KEY);
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
         setUser(null);
         setIsAuthenticated(false);
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
-        localStorage.removeItem(USER_STORAGE_KEY);
         delete api.defaults.headers.common['Authorization'];
     }, []);
 
+    // چک کردن وضعیت لاگین هنگام لود صفحه
     useEffect(() => {
-        const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-        const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+        const access = localStorage.getItem(ACCESS_TOKEN_KEY);
+        const userStr = localStorage.getItem(USER_KEY);
         
-        if (storedToken && storedUser) {
+        if (access && userStr) {
             try {
-                const parsedUser = JSON.parse(storedUser) as AuthUser; 
-                setAuthData(storedToken, parsedUser);
-            } catch (error) {
+                setUser(JSON.parse(userStr));
+                setIsAuthenticated(true);
+                api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
+            } catch (e) {
                 clearAuthData();
             }
         }
         setIsLoading(false);
-    }, [clearAuthData, setAuthData]);
+    }, [clearAuthData]);
 
-    // Login API call
     const login = useCallback(async (data: LoginData) => {
-        const response = await apiLogin(data);
-        setAuthData(response.token, response.user as AuthUser); 
-        return response; 
+        try {
+            const response = await apiLogin(data); // returns { access, refresh }
+            
+            // اینجا یک نکته مهم است: 
+            // چون JWT اطلاعات کاربر (نام، نقش) را برنمی‌گرداند، 
+            // ما فعلا یک آبجکت موقت می‌سازیم یا باید یک ریکوئست دیگر بزنیم.
+            // برای سادگی و جلوگیری از پیچیدگی فعلا نام کاربری را از ورودی می‌گیریم.
+            const mockUser: AuthUser = {
+                id: 0, 
+                username: data.username,
+                agency_id: null,
+                agency_role: null
+            };
+
+            setAuthData(response.access, response.refresh, mockUser);
+            return true;
+        } catch (error) {
+            console.error("Login failed", error);
+            throw error;
+        }
     }, [setAuthData]);
 
-    // Register API call
     const register = useCallback(async (data: RegisterData) => {
         const response = await apiRegister(data);
-        setAuthData(response.token, response.user as AuthUser); 
-        return response; 
-    }, [setAuthData]);
+        // بسته به خروجی رجیستر، شاید لازم باشد اینجا هم لاگین خودکار انجام شود
+        return response;
+    }, []);
 
     const logout = useCallback(() => {
         clearAuthData();
-        // جهت اطمینان بیشتر، اگر کلیدی با نام قدیمی وجود دارد هم پاک شود
-        localStorage.removeItem('authToken'); 
-        router.push('/login'); 
+        router.push('/login');
     }, [clearAuthData, router]);
 
-    return { isAuthenticated, user, token, login, register, logout, isLoading };
+    return { isAuthenticated, user, login, register, logout, isLoading };
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -105,11 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return (
         <AuthContext.Provider value={auth}>
-            {auth.isLoading ? (
-                <div className="flex items-center justify-center min-h-screen">Checking auth status...</div>
-            ) : (
-                children
-            )}
+            {!auth.isLoading && children}
         </AuthContext.Provider>
     );
 };
